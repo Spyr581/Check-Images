@@ -11,16 +11,14 @@ class InitServiceOutputInfo:
     to the console and to the file.
     """
 
-    def __init__(self, tmpls_dict, path_to_tmpls, scr_img_path, precision):
+    def __init__(self, tmpls_dict, path_to_tmpls, precision):
         """
         :param tmpls_dict:    dict, contains pairs - {path to template images: list of images, ...}
         :param path_to_tmpls: str, path to folder with image templates
-        :param scr_img_name:  str, path to screenshot, on which templates should be found
         :param precision:     float
         """
         self.__tmpls_dict = tmpls_dict
         self.__path_to_tmpls = path_to_tmpls
-        self.__scr_img_path = scr_img_path
         self.__prec = precision
 
         self.__img_indent = 0
@@ -30,7 +28,11 @@ class InitServiceOutputInfo:
     def __count_indents(self):
         length_list = []
         for tmpl_pack in self.__tmpls_dict.items():
-            tmpl_name = tmpl_pack[0].split(self.__path_to_tmpls)[1]
+            if len(self.__path_to_tmpls[1]) == 0:
+                tmpl_name = tmpl_pack[0].split(self.__path_to_tmpls[0])[1]
+            else:
+                tmpl_name = self.__path_to_tmpls[1]
+
             img_name = tmpl_name[1:] if tmpl_name is not None else ''
             length_img_name = len(img_name)
             length_list += list(map(lambda x: len(x) + length_img_name + 1, tmpl_pack[1]))
@@ -43,9 +45,9 @@ class InitServiceOutputInfo:
         right_indent = max_length - string_length - left_indent
         return left_indent, right_indent
 
-    def print_header(self):
-        tmpls_folder = f'|   FOLDER - {self.__path_to_tmpls}   |'
-        screenshot = f'|   SCREENSHOT - {self.__scr_img_path}   |'
+    def print_header(self, scr_image):
+        tmpls_folder = f'|   FOLDER - {self.__path_to_tmpls[0]}   |'
+        screenshot = f'|   SCREENSHOT - {scr_image}   |'
         precision = f'|   PRECISION - {self.__prec}   ///   '
         time = datetime.datetime.now()
         time_as_str = time.strftime('%Y-%m-%d %H:%M:%S') + '   |'
@@ -55,11 +57,11 @@ class InitServiceOutputInfo:
 
         # 1st string
         left, right = self.__calculate_header_indents(max_length, len(tmpls_folder))
-        tmpls_folder = f'|   {" " * left}FOLDER - {self.__path_to_tmpls}{" " * right}   |'
+        tmpls_folder = f'|   {" " * left}FOLDER - {self.__path_to_tmpls[0]}{" " * right}   |'
 
         # 2nd string
         left, right = self.__calculate_header_indents(max_length, len(screenshot))
-        screenshot = f'|   {" " * left}SCREENSHOT - {self.__scr_img_path}{" " * right}   |'
+        screenshot = f'|   {" " * left}SCREENSHOT - {scr_image}{" " * right}   |'
 
         # 3rd string
         left, right = self.__calculate_header_indents(max_length, len(third_string))
@@ -108,7 +110,7 @@ class OutputInfo:
         """
         :param path_to_tmpls: str, path to folder with image templates
         :param thr:           float
-        :param prec:          float
+        :param precision:     float
         :param tmpl_indent:   int, calculated indent for the template name field
         :param thr_indent:    int, calculated indent for the threshold field
         :param coord_indent:  int, calculated indent for the coordinate fields
@@ -156,8 +158,8 @@ class OutputInfo:
 
 class CheckImages:
     """
-    The class searches for all template images from the folder and its subfolders `path_to_tmpls` in the screenshot
-    `path_to_screen_img`. With the given `precision`, it gives the maximum possible threshold with which each
+    The class searches for one template image or all template images from the folder and its subfolders `path_to_tmpls`
+    in all screenshots `screen_img`. With the given `precision`, it gives the maximum possible threshold with which each
     template can be found on the screen image. It also additionally outputs the coordinates of the top left point
     of each template on the screen image where the template was found. The threshold is found in the range
     `min_threshold` ... `max_threshold`. Prints information to the console and to a file.
@@ -165,48 +167,57 @@ class CheckImages:
 
     __extension_list = ['png', 'jpg', 'webp']
     __tmpls_dict = dict()
-    __scr_img_gray = None
+    __scr_img_gray_list = list()
 
-    def __init__(self, path_to_tmpls, path_to_screen_img, min_threshold=0.8, max_threshold=0.999999, precision=0.001):
+    def __init__(self, path_to_tmpls, screen_img, min_threshold=0.8, max_threshold=0.999999, precision=0.001):
         """
-        :param path_to_tmpls:      str, path to folder with image templates, can be insist subfolders with image
-                                    templates
-        :param path_to_screen_img: str, path to screenshot, on which templates should be found
+        :param path_to_tmpls:      str, path to one image file or folder with image files, folder can be insist
+                                   subfolders with images templates
+        :param screen_img:         str, one or several paths to screenshot(-s), on which templates should be found,
+                                   delimiter is ' * '
         :param min_threshold:      float
         :param max_threshold:      float
         :param precision:          float
         """
-        self.__path_to_tmpls = self.__check_templates_dir(path_to_tmpls)
-        self.__path_to_screen_img = self.__check_screen_img_exist(path_to_screen_img)
+        self.__path_to_tmpls = self.__check_templates(path_to_tmpls)
+        self.__screen_img_list = self.__check_screen_img_exist(screen_img)
         self.__min_threshold = self.__check_threshold(min_threshold, 'min')
         self.__max_threshold = self.__check_threshold(max_threshold, 'max')
         self.__precision = self.__check_precision(precision)
         self.__output_preparing = None
+        self.__screen_index = 0
 
-    def __check_templates_dir(self, path):
-        if not os.path.isdir(path):
-            error = f'Dir {path} not found'
+    def __check_templates(self, path):
+        if os.path.isdir(path):
+            return path, ''
+
+        elif os.path.isfile(path):
+            file_extension = path.split('.')[-1].lower()
+            if file_extension in self.__extension_list:
+                p = os.path.split(path)
+                return p[0], p[1]
+            else:
+                error = f'File {path} not in proper format ({self.__extension_list})'
+                raise IOError(error)
+
+        else:
+            error = f'{path} not found'
             raise IOError(error)
 
-        return path
+    def __check_screen_img_exist(self, screen_img):
+        img_list = screen_img.split(' * ')
+        checked_img_list = []
+        for img in img_list:
+            if os.path.isfile(img):
+                extension = img.split('.')[-1].lower()
+                if extension in self.__extension_list:
+                    checked_img_list.append(img)
 
-    def __check_screen_img_exist(self, path):
-        if not os.path.exists(path):
-            error = f'Image {path} not found'
+        if not checked_img_list:
+            error = f'Any compatible image(-s) in {img_list} not found'
             raise IOError(error)
 
-        extension = path.split('.')[-1].lower()
-        if not self.__check_extension(extension):
-            error = f'Image\'s extension not in list {self.__class__.__extension_list}'
-            raise TypeError(error)
-
-        return path
-
-    def __check_extension(self, ext):
-        if ext in self.__class__.__extension_list:
-            return True
-
-        return False
+        return checked_img_list
 
     def __check_threshold(self, thr, type_):
         if not isinstance(thr, float):
@@ -238,12 +249,16 @@ class CheckImages:
         return round(thr, len(str(self.__precision)) - 2)
 
     def __find_all_template_files(self):
-        for root, dirs, images in os.walk(self.__path_to_tmpls):
-            prepared_images = []
-            for img in images:
-                if img.split('.')[-1] in self.__class__.__extension_list:
-                    prepared_images.append(img)
-            self.__class__.__tmpls_dict[root] = prepared_images
+        if len(self.__path_to_tmpls[1]) == 0:
+            for root, dirs, images in os.walk(self.__path_to_tmpls[0]):
+                prepared_images = []
+                for img in images:
+                    if img.split('.')[-1] in self.__class__.__extension_list:
+                        prepared_images.append(img)
+                self.__class__.__tmpls_dict[root] = prepared_images
+
+        else:
+            self.__class__.__tmpls_dict[self.__path_to_tmpls[0]] = [self.__path_to_tmpls[1]]
 
     def __any_img_to_grayscale(self, path):
         img_rgb = cv2.imread(path)
@@ -251,11 +266,11 @@ class CheckImages:
 
     def __find_one_image(self, img):
         img = self.__any_img_to_grayscale(img)
-        return cv2.matchTemplate(img, self.__class__.__scr_img_gray, cv2.TM_CCOEFF_NORMED)
+        return cv2.matchTemplate(img, self.__class__.__scr_img_gray_list[self.__screen_index], cv2.TM_CCOEFF_NORMED)
 
     def __find_thresholds_for_all_images(self):
         with open('thresholds.txt', 'at', encoding='utf-8') as f:
-            header_info = self.__output_preparing.print_header()
+            header_info = self.__output_preparing.print_header(self.__screen_img_list[self.__screen_index])
             f.writelines(header_info[0])  # ------------------------------------------------------
             f.writelines(header_info[1])  # |      FOLDER - F:\work\Pictures\252_sizzling6       |
             f.writelines(header_info[2])  # |        SCREENSHOT - F:\work\template_on.png        |
@@ -282,12 +297,12 @@ class CheckImages:
                         if positive_result:
                             threshold_new = (threshold + threshold_right) / 2
                             threshold_left = threshold
-                            precision = abs(threshold_new - threshold)
+                            precision = threshold_right - threshold_left
                             threshold = threshold_new
                         elif negative_result:
                             threshold_new = (threshold_left + threshold) / 2
                             threshold_right = threshold
-                            precision = abs(threshold_new - threshold)
+                            precision = threshold_right - threshold_left
                             threshold = threshold_new
                         else:
                             error = f'Wrong searchng: {location[0]=}, {location[1]=}'
@@ -300,7 +315,7 @@ class CheckImages:
                     for item in zip(*location[::-1]):
                         x, y = int(item[0]), int(item[1])
 
-                    one_entry_to_output = OutputInfo(self.__path_to_tmpls, threshold, self.__precision,
+                    one_entry_to_output = OutputInfo(self.__path_to_tmpls[0], threshold, self.__precision,
                                                      self.__output_preparing.img_indent,
                                                      self.__output_preparing.threshold_indent,
                                                      self.__output_preparing.coord_indent,
@@ -314,11 +329,14 @@ class CheckImages:
             f.writelines('\n\n')
 
     def run(self):
-        self.__class__.__scr_img_gray = self.__any_img_to_grayscale(self.__path_to_screen_img)
+        for img in self.__screen_img_list:
+            self.__class__.__scr_img_gray_list.append(self.__any_img_to_grayscale(img))
         self.__find_all_template_files()
         self.__output_preparing = InitServiceOutputInfo(self.__class__.__tmpls_dict, self.__path_to_tmpls,
-                                                        self.__path_to_screen_img, self.__precision)
-        self.__find_thresholds_for_all_images()
+                                                        self.__precision)
+        for _ in range(len(self.__scr_img_gray_list)):
+            self.__find_thresholds_for_all_images()
+            self.__screen_index += 1
 
 
 def main():
@@ -326,7 +344,8 @@ def main():
     parser.add_argument('-t', '--templates', type=str, dest="path_to_tmpls",
                         help="Path to template images folder, required parameter", default='')
     parser.add_argument('-i', '--image', type=str, dest="scr_img_path",
-                        help="Path to screen image where templates will be searched, required parameter", default='')
+                        help="Path to screen image(-s) where templates will be searched, path can be one or several,"
+                             " delimiter is ' * ', required parameter", default='')
     parser.add_argument('-n', '--min', type=float, dest="min_threshold",
                         help="Minimum threshold value in range", default=0.6)
     parser.add_argument('-x', '--max', type=float, dest="max_threshold",
@@ -343,3 +362,13 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# path_to_tmpls = 'D:\\My_documents\\Programming\\Python\\Check Images\\t.png'
+# scr_img_path = 'D:\\My_documents\\Programming\\Python\\Check Images\\i1.png * D:\\My_documents\\Programming\\Python\\' \
+#                'Check Images\\i2.png'
+# min_threshold = 0.6
+# max_threshold = 0.999999
+# precision = 0.0001
+
+# check = CheckImages(path_to_tmpls, scr_img_path, min_threshold, max_threshold, precision)
+# check.run()
