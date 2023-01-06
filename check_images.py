@@ -1,3 +1,6 @@
+# Check images by OpenCV
+# Version 1.2.1
+
 import argparse
 import cv2
 import numpy
@@ -11,10 +14,11 @@ class InitServiceOutputInfo:
     to the console and to the file.
     """
 
-    def __init__(self, tmpls_dict, path_to_tmpls, precision):
+    def __init__(self, tmpls_dict: dict, path_to_tmpls: tuple, precision: float):
         """
         :param tmpls_dict:    dict, contains pairs - {path to template images: list of images, ...}
-        :param path_to_tmpls: str, path to folder with image templates
+        :param path_to_tmpls: tuple, 2 items: 0 - str, path to one image file or folder with image files, folder
+                              1 - str, filename if the input is one file, else - empty string
         :param precision:     float
         """
         self.__tmpls_dict = tmpls_dict
@@ -28,26 +32,25 @@ class InitServiceOutputInfo:
 
     def __count_indents(self):
         length_list = []
-        for tmpl_pack in self.__tmpls_dict.items():
-            if len(self.__path_to_tmpls[1]) == 0:
-                tmpl_name = tmpl_pack[0].split(self.__path_to_tmpls[0])[1]
-            else:
-                tmpl_name = self.__path_to_tmpls[1]
+        if len(self.__path_to_tmpls[1]) > 0:
+            img_name = self.__path_to_tmpls[1]
+            length_list.append(len(img_name))
+        else:
+            for tmpl_path, tmpl_names_list in self.__tmpls_dict.items():
+                subdir_name = tmpl_path.split(self.__path_to_tmpls[0])[1]
+                length_list += list(map(lambda x: len(subdir_name) + len(x), tmpl_names_list))
 
-            img_name = tmpl_name if tmpl_name is not None else ''
-            length_img_name = len(img_name)
-            length_list += list(map(lambda x: len(x) + length_img_name + 1, tmpl_pack[1]))
-        self.__img_indent = max(length_list) + 4
+        self.__img_indent = max(length_list) + 5
         self.__count_indent = 8
         self.__threshold_indent = len(str(self.__prec)) + 6
         self.__coord_indent = 8
 
-    def __calculate_header_indents(self, max_length, string_length):
+    def __calculate_header_indents(self, max_length: int, string_length: int) -> (int, int):
         left_indent = (max_length - string_length) // 2
         right_indent = max_length - string_length - left_indent
         return left_indent, right_indent
 
-    def print_header(self, scr_image):
+    def print_header(self, scr_image: str) -> (str, str, str, str, str):
         tmpls_folder = f'|   FOLDER - {self.__path_to_tmpls[0]}   |'
         screenshot = f'|   SCREENSHOT - {scr_image}   |'
         precision = f'|   PRECISION - {self.__prec}   ///   '
@@ -84,8 +87,11 @@ class InitServiceOutputInfo:
               header,
               '-' * max_length, sep='\n')
 
-        return ('-' * max_length + '\n', tmpls_folder + '\n', screenshot + '\n',
-                third_string + '\n', header + '\n', '-' * max_length + '\n')
+        return ('-' * max_length + '\n',
+                tmpls_folder + '\n',
+                screenshot + '\n',
+                third_string + '\n',
+                header + '\n')
 
     @property
     def img_indent(self):
@@ -110,8 +116,8 @@ class OutputInfo:
     the console and to the file.
     """
 
-    def __init__(self, path_to_tmpls, thr, precision, tmpl_indent, count_indent, thr_indent, coord_indent,
-                 tmpl=None, count=None, x=None, y=None):
+    def __init__(self, path_to_tmpls: str, thr: float, precision: float, tmpl_indent: int, count_indent: int,
+                 thr_indent: int, coord_indent: int, tmpl=None, count=None, x=None, y=None):
         """
         :param path_to_tmpls: str, path to folder with image templates
         :param thr:           float
@@ -137,18 +143,13 @@ class OutputInfo:
         self.__x = x
         self.__y = y
 
-    def __get_tmpl_name_with_subdirs(self, tmpl):
+    def __get_tmpl_name_with_subdirs(self, tmpl: str) -> str:
         if tmpl == '':
             return tmpl
         tmpl_name = tmpl.split(self.__path_to_tmpls)[1]
-        return tmpl_name[1:]
+        return tmpl_name[1:]   # Minus \ in begin filename
 
-    def __round_threshold(self):
-        self.__thr = round(self.__thr, len(str(self.__prec)) - 1)
-
-    def print_one_found_entry(self):
-        self.__round_threshold()
-
+    def print_one_found_entry(self) -> str:
         one_entry = f'{self.__tmpl}{" " * (self.__tmpl_indent - len(self.__tmpl))}|' \
                     f'{"  "}{self.__count}{" " * (self.__count_indent - len(str(self.__count)) - 2)}|' \
                     f'{self.__thr}{" " * (self.__threshold_indent - len(str(self.__thr)))}|' \
@@ -158,7 +159,7 @@ class OutputInfo:
 
         return one_entry + '\n'
 
-    def print_one_not_found_entry(self):
+    def print_one_not_found_entry(self) -> str:
         one_entry = f'{self.__tmpl}{" " * (self.__tmpl_indent - len(self.__tmpl))}|' \
                     f'{"  "}0{" " * (self.__count_indent - 3)}|' \
                     f'Not found{" " * (self.__threshold_indent - 9)}|' \
@@ -180,10 +181,10 @@ class CheckImages:
     """
 
     __extension_list = ['png', 'jpg', 'webp']
-    __tmpls_dict = dict()
+    __tmpls_dict = dict()   # {'D:\\Python\\Check Images\\tf': ['e.png', 't.png'], ...}
     __scr_img_gray_list = list()
 
-    def __init__(self, path_to_tmpls, screen_img, min_threshold=0.8, precision=0.001):
+    def __init__(self, path_to_tmpls: str, screen_img: str, min_threshold=0.6, precision=0.0001):
         """
         :param path_to_tmpls:      str, path to one image file or folder with image files, folder can be insist
                                    subfolders with images templates
@@ -192,7 +193,10 @@ class CheckImages:
         :param min_threshold:      float
         :param precision:          float
         """
-        self.__path_to_tmpls = self.__check_templates(path_to_tmpls)
+        self.__path_to_tmpls = self.__check_templates(path_to_tmpls)   # tuple, 2 items: 0 - str, path to one image
+                                                                       # file or folder with image files, folder
+                                                                       # 1 - str, filename if the input is one file,
+                                                                       # else - empty string
         self.__screen_img_list = self.__check_screen_img(screen_img)
         self.__min_threshold = self.__check_threshold(min_threshold, 'min')
         self.__precision = self.__check_precision(precision)
@@ -200,8 +204,8 @@ class CheckImages:
         self.__screen_index = 0
         self.__height = None
         self.__width = None
-
-    def __check_templates(self, path):
+    
+    def __check_templates(self, path: str) -> (str, str):
         if os.path.isdir(path):
             return path, ''
 
@@ -218,7 +222,7 @@ class CheckImages:
             error = f'{path} not found'
             raise IOError(error)
 
-    def __check_screen_img(self, screen_img):
+    def __check_screen_img(self, screen_img: str) -> [str, ]:
         img_list = screen_img.split(' * ')
         checked_img_list = []
         for img in img_list:
@@ -233,7 +237,7 @@ class CheckImages:
 
         return checked_img_list
 
-    def __check_threshold(self, thr, type_):
+    def __check_threshold(self, thr: float, type_: str) -> float:
         if not isinstance(thr, float):
             if type_ == 'min':
                 error = f'min_threshold={thr} but it should be a number'
@@ -246,16 +250,17 @@ class CheckImages:
 
         return thr
 
-    def __check_precision(self, prec):
+    def __check_precision(self, prec: float) -> float:
         if not isinstance(prec, float) or not 0 < prec < 1:
             error = f'precision={prec} but it should be a number in range 0 ... 1'
             raise TypeError(error)
 
         return prec
 
-    def __round_threshold(self, thr):
-        thr = int(thr * 10 ** (len(str(self.__precision)) - 2))
-        return thr * self.__precision
+    def __round_threshold(self, thr: float) -> float:
+        multiplier = 10 ** (len(str(self.__precision)) - 2)
+        thr = int(thr * multiplier)
+        return thr / multiplier
 
     def __find_all_template_files(self):
         if len(self.__path_to_tmpls[1]) == 0:
@@ -269,16 +274,16 @@ class CheckImages:
         else:
             self.__class__.__tmpls_dict[self.__path_to_tmpls[0]] = [self.__path_to_tmpls[1]]
 
-    def __any_img_to_grayscale(self, path):
+    def __any_img_to_grayscale(self, path: str) -> numpy.ndarray:
         img_rgb = cv2.imread(path)
         return cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
 
-    def __find_one_image(self, img):
+    def __find_one_image(self, img: str) -> numpy.ndarray:
         img = self.__any_img_to_grayscale(img)
         self.__height, self.__width = img.shape
         return cv2.matchTemplate(img, self.__class__.__scr_img_gray_list[self.__screen_index], cv2.TM_CCOEFF_NORMED)
 
-    def __filter_near_points(self, found_tmpl_dict):
+    def __filter_near_points(self, found_tmpl_dict: dict) -> list:
         prev_pt = None
         max_correlation = -1
         pt_with_max_correlation = None
@@ -303,7 +308,7 @@ class CheckImages:
                     all_points_list.append(pt_with_max_correlation)
                     max_correlation = found_tmpl_dict[pt]
             prev_pt = pt
-        if pt_with_max_correlation is not None:     # Add the last point
+        if pt_with_max_correlation is not None:     # Add the last point if any point has been found
             all_points_list.append(pt_with_max_correlation)
 
         return list(set(all_points_list))
@@ -317,19 +322,19 @@ class CheckImages:
             f.writelines(header_info[3])    # |   PRECISION - 0.0001   ///   2023-01-05 16:23:44   |
             f.writelines(header_info[0])    # ------------------------------------------------------
             f.writelines(header_info[4])    # IMAGE           |COUNT   |THRESHOLD   |X       |Y
-            f.writelines(header_info[5])    # ------------------------------------------------------
+            f.writelines(header_info[0])    # ------------------------------------------------------
 
-            for tmpls_pack in self.__class__.__tmpls_dict.items():
-                for tmpl in tmpls_pack[1]:
+            for tmpl_path, tmpl_names_list in self.__class__.__tmpls_dict.items():
+                for tmpl_name in tmpl_names_list:
                     found_tmpl_dict = dict()
 
-                    tmpl_to_find = tmpls_pack[0] + os.sep + tmpl
+                    tmpl_to_find = tmpl_path + os.sep + tmpl_name
                     searching = self.__find_one_image(tmpl_to_find)
                     location = numpy.where(searching >= self.__min_threshold)
                     for pt in zip(*location[::-1]):
                         if found_tmpl_dict.get(pt) is None:
                             found_tmpl_dict[pt] = searching[pt[1], pt[0]]
-                    all_points_list = self.__filter_near_points(found_tmpl_dict)
+                    all_points_list = self.__filter_near_points(found_tmpl_dict)   # [((849, 69), 0.8667161), ...]
                     num_tmpls_found = len(all_points_list)
 
                     if num_tmpls_found > 0:
@@ -394,13 +399,12 @@ def main():
 if __name__ == '__main__':
     main()
 
-# path_to_tmpls = 'D:\\My_documents\\Programming\\Python\\Check Images\\tf'
-# scr_img_path = 'D:\\My_documents\\Programming\\Python\\Check Images\\i1_2.png'
-# # path_to_tmpls = 'F:\\work\\autotest\\tests\\launcher\\l_screens\\games\\393'
-# # scr_img_path = 'E:\\Video edit\\Capture\\bandicam 2022-12-29 14-21-03-483.png * ' \
-# #                'E:\\Video edit\\Capture\\bandicam 2022-12-29 14-22-18-041.png'
-# min_threshold = 0.6
-# precision = 0.0001
+# # path_to_tmpls = 'D:\\My_documents\\Programming\\Python\\Check Images\\tf'
+# # scr_img_path = 'D:\\My_documents\\Programming\\Python\\Check Images\\i1_2.png'
+# path_to_tmpls = 'F:\\work\\autotest\\tests\\launcher\\l_screens\\games\\393'
+# scr_img_path = 'E:\\Video edit\\Capture\\bandicam 2022-12-29 14-21-03-483.png * ' \
+#                'E:\\Video edit\\Capture\\bandicam 2022-12-29 14-22-18-041.png * ' \
+#                'E:\\Video edit\\Capture\\bandicam 2022-12-30 16-10-28-959.png'
 #
-# check = CheckImages(path_to_tmpls, scr_img_path, min_threshold, precision)
+# check = CheckImages(path_to_tmpls, scr_img_path)
 # check.run()
