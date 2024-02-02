@@ -1,5 +1,6 @@
 import wx
 import os
+import configparser
 
 
 class GUIUtils:
@@ -252,8 +253,8 @@ class MyFrame(wx.Frame, GUIUtils):
 
     def show_settings_dialog(self, event):
         # Создание и отображение диалогового окна
-        dlg = SettingsDialog(self, title="Настройки", size=(620, 320))
-        result = dlg.ShowModal()
+        dlg = SettingsDialog(self, title="Настройки", size=(640, 400))
+        dlg.ShowModal()
         dlg.Destroy()
 
 
@@ -263,43 +264,47 @@ class SettingsDialog(wx.Dialog):
 
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
-        gbs = wx.GridBagSizer(8, 6)   # row, col
+        gbs = wx.GridBagSizer(9, 6)   # row, col
 
         # Минимальный порог
         label_threshold = wx.StaticText(panel, label="Минимальный порог")
-        text_threshold = wx.TextCtrl(panel)
+        self.text_threshold = wx.TextCtrl(panel)
         gbs.Add(label_threshold, pos=(0, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(text_threshold, pos=(0, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(self.text_threshold, pos=(0, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Точность
         label_precision = wx.StaticText(panel, label="Точность")
-        text_precision = wx.TextCtrl(panel)
+        self.text_precision = wx.TextCtrl(panel)
         gbs.Add(label_precision, pos=(1, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(text_precision, pos=(1, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(self.text_precision, pos=(1, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Выпадающий список
         label_dropdown = wx.StaticText(panel, label="Направление поиска")
         choices = ["Картинки по скриншотам", "Скриншоты по картинкам"]
-        dropdown = wx.Choice(panel, choices=choices)
-        dropdown.SetSelection(0)
+        self.dropdown = wx.Choice(panel, choices=choices)
+        # self.dropdown.SetSelection(0)
         gbs.Add(label_dropdown, pos=(2, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(dropdown, pos=(2, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(self.dropdown, pos=(2, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Галочка "Учитывать вложенные папки"
         label_checkbox_folders = wx.StaticText(panel, label="Учитывать вложенные папки")
-        checkbox_nested_folders = wx.CheckBox(panel)
+        self.checkbox_nested_folders = wx.CheckBox(panel)
         gbs.Add(label_checkbox_folders, pos=(3, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(checkbox_nested_folders, pos=(3, 2), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(self.checkbox_nested_folders, pos=(3, 2), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
-        # Сохранять в
-        label_save_to = wx.StaticText(panel, label="Сохранять в")
+        # Галочка "Сохранять txt файл"
+        label_checkbox_save_txt = wx.StaticText(panel, label="Сохранять txt файл")
+        self.checkbox_save_txt = wx.CheckBox(panel)
+        gbs.Add(label_checkbox_save_txt, pos=(4, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(self.checkbox_save_txt, pos=(4, 2), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+
+        # Путь к файлу
         self.text_save_to = wx.TextCtrl(panel)
-        btn_browse = wx.Button(panel, label="Обзор")
-        gbs.Add(label_save_to, pos=(4, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(self.text_save_to, pos=(4, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(btn_browse, pos=(4, 5), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        self.btn_browse = wx.Button(panel, label="Обзор")
+        gbs.Add(self.text_save_to, pos=(5, 0), span=(1, 5), flag=wx.EXPAND | wx.LEFT | wx.RIGHT, border=5)
+        gbs.Add(self.btn_browse, pos=(5, 5), flag=wx.LEFT | wx.RIGHT, border=5)
 
-        vbox.Add(gbs, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        vbox.Add(gbs, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 8)
         gbs.AddGrowableCol(3)
 
         vbox.Add(wx.StaticText(panel, label=""), 1, wx.EXPAND)
@@ -308,31 +313,153 @@ class SettingsDialog(wx.Dialog):
         btn_ok = wx.Button(panel, label="OK")
         btn_cancel = wx.Button(panel, label="Отмена")
         hbox_btns = wx.BoxSizer(wx.HORIZONTAL)
-        hbox_btns.Add(btn_ok, 0, wx.ALL, 10)
-        hbox_btns.Add(btn_cancel, 0, wx.ALL, 10)
-        vbox.Add(hbox_btns, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        hbox_btns.Add(btn_ok, 0, wx.RIGHT, 20)
+        hbox_btns.Add(btn_cancel, 0, wx.LEFT, 20)
+        vbox.Add(hbox_btns, 0, wx.ALIGN_CENTER | wx.BOTTOM, 20)
 
+        self.load_settings()
         panel.SetSizer(vbox)
         self.Centre()
 
-        self.Bind(wx.EVT_BUTTON, self.on_browse, btn_browse)
+        self.text_threshold.Bind(wx.EVT_CHAR, self.on_text_char)
+        self.text_precision.Bind(wx.EVT_CHAR, self.on_text_char)
+        self.Bind(wx.EVT_BUTTON, self.on_browse, self.btn_browse)
         self.Bind(wx.EVT_BUTTON, self.on_ok, btn_ok)
         self.Bind(wx.EVT_BUTTON, self.on_cancel, btn_cancel)
+        self.Bind(wx.EVT_CHECKBOX, self.on_checkbox_change, self.checkbox_save_txt)
+
+    @staticmethod
+    def on_text_char(event):
+        # Обработчик события ввода символа в текстовое поле
+        key = event.GetKeyCode()
+
+        # Разрешаем ввод только цифр 0-9 и точки
+        if key < wx.WXK_SPACE or key == wx.WXK_DELETE or key > 255:
+            event.Skip()
+            return
+
+        if chr(key) in '0123456789.':
+            event.Skip()
+
+    def on_browse(self, event):
+        # Создаем диалоговое окно сохранения файла
+        wildcard = "Text files (*.txt)|*.txt"
+        file_dialog = wx.FileDialog(self, "Выберите файл для сохранения",
+                                    style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
+                                    wildcard=wildcard)
+
+        if file_dialog.ShowModal() == wx.ID_OK:
+            # Получаем выбранный путь файла
+            selected_path = file_dialog.GetPath()
+            # Устанавливаем путь в текстовом поле
+            self.text_save_to.SetValue(selected_path)
+
+        file_dialog.Destroy()
 
     def on_ok(self, event):
         # Обработка нажатия кнопки "OK"
+        save_path = self.text_save_to.GetValue()
+        forbidden_symbols = '*?\"<>|'
+
+        if not os.path.isabs(save_path) or any(char in forbidden_symbols for char in save_path):
+            wx.MessageBox("Пожалуйста, введите правильный путь к файлу.", "Некорректный путь", wx.OK | wx.ICON_ERROR)
+            return
+
+        # Сравнение текущих значений с загруженными
+        threshold = float(self.text_threshold.GetValue())
+        precision = float(self.text_precision.GetValue())
+        dropdown_selection = self.dropdown.GetSelection()
+        nested_folders_checked = self.checkbox_nested_folders.GetValue()
+        save_txt_checked = self.checkbox_save_txt.GetValue()
+        save_txt_path = self.text_save_to.GetValue()
+
+        if (
+                threshold != self.loaded_threshold or
+                precision != self.loaded_precision or
+                dropdown_selection != self.loaded_dropdown_selection or
+                nested_folders_checked != self.loaded_nested_folders_checked or
+                save_txt_checked != self.loaded_save_txt_checked or
+                save_txt_path != self.loaded_save_txt_path
+        ):
+            # Если значения отличаются, сохраняем изменения в файл конфигурации
+            self.save_settings()
+
         self.EndModal(wx.ID_OK)
 
     def on_cancel(self, event):
         # Обработка нажатия кнопки "Отмена"
         self.EndModal(wx.ID_CANCEL)
 
-    def on_browse(self, event):
-        # Обработка нажатия кнопки "Обзор"
-        dlg = wx.DirDialog(self, "Выберите папку", style=wx.DD_DEFAULT_STYLE | wx.DD_DIR_MUST_EXIST)
-        if dlg.ShowModal() == wx.ID_OK:
-            self.text_save_to.SetValue(dlg.GetPath())
-            dlg.Destroy()
+    def on_checkbox_change(self, event):
+        checkbox = event.GetEventObject()
+
+        # Получаем состояние галочки
+        is_checked = checkbox.GetValue()
+
+        # Устанавливаем активность/неактивность для текстового поля и кнопки
+        self.text_save_to.Enable(is_checked)
+        self.btn_browse.Enable(is_checked)
+
+    def save_settings(self):
+        config = configparser.ConfigParser()
+
+        # Устанавливаем значения параметров
+        config['Settings'] = {
+            'Threshold': self.text_threshold.GetValue(),
+            'Precision': self.text_precision.GetValue(),
+            'DropdownSelection': str(self.dropdown.GetSelection()),
+            'NestedFoldersChecked': str(self.checkbox_nested_folders.GetValue()),
+            'SaveTxtChecked': str(self.checkbox_save_txt.GetValue()),
+            'SaveTxtPath': self.text_save_to.GetValue(),
+        }
+
+        # Сохраняем конфигурацию в файл
+        with open('./check_images.ini', 'w') as configfile:
+            config.write(configfile)
+
+    def load_settings(self):
+        config = configparser.ConfigParser()
+
+        try:
+            # Пытаемся прочитать файл конфигурации
+            config.read('./check_images.ini')
+
+            # Получаем значения параметров из файла .ini
+            threshold = config.getfloat('Settings', 'Threshold')
+            precision = config.getfloat('Settings', 'Precision')
+            dropdown_selection = config.getint('Settings', 'DropdownSelection')
+            nested_folders_checked = config.getboolean('Settings', 'NestedFoldersChecked')
+            save_txt_checked = config.getboolean('Settings', 'SaveTxtChecked')
+            save_txt_path = config.get('Settings', 'SaveTxtPath')
+
+            # Устанавливаем значения в соответствующие элементы окна
+            self.text_threshold.SetValue(str(threshold))
+            self.text_precision.SetValue(str(precision))
+            self.dropdown.SetSelection(dropdown_selection)
+            self.checkbox_nested_folders.SetValue(nested_folders_checked)
+            self.checkbox_save_txt.SetValue(save_txt_checked)
+            self.text_save_to.SetValue(save_txt_path)
+
+            # Активируем/деактивируем текстовое поле и кнопку "Обзор"
+            self.text_save_to.Enable(save_txt_checked)
+            self.btn_browse.Enable(save_txt_checked)
+
+        except (configparser.Error, FileNotFoundError):
+            # Если возникает ошибка, используем значения по умолчанию
+            self.text_threshold.SetValue('0.6')
+            self.text_precision.SetValue('0.0001')
+            self.dropdown.SetSelection(0)
+            self.checkbox_nested_folders.SetValue(False)
+            self.checkbox_save_txt.SetValue(True)
+            folder = os.path.abspath(os.curdir)
+            self.text_save_to.SetValue(os.path.join(folder, 'thresholds.txt'))
+
+        self.loaded_threshold = float(self.text_threshold.GetValue())
+        self.loaded_precision = float(self.text_precision.GetValue())
+        self.loaded_dropdown_selection = self.dropdown.GetSelection()
+        self.loaded_nested_folders_checked = self.checkbox_nested_folders.GetValue()
+        self.loaded_save_txt_checked = self.checkbox_save_txt.GetValue()
+        self.loaded_save_txt_path = self.text_save_to.GetValue()
 
 
 app = wx.App(False)
