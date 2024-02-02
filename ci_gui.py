@@ -83,7 +83,7 @@ class CIMainWindow(wx.Frame, GUIUtils):
         vbox_left = wx.BoxSizer(wx.VERTICAL)
 
         label_left = wx.StaticText(panel, label="СКРИНШОТЫ")
-        font = wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
+        font = wx.Font(14, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
         label_left.SetFont(font)
         vbox_left.Add(label_left, 0, wx.ALIGN_CENTER)
 
@@ -114,7 +114,7 @@ class CIMainWindow(wx.Frame, GUIUtils):
         vbox_right = wx.BoxSizer(wx.VERTICAL)
 
         label_right = wx.StaticText(panel, label="КАРТИНКИ")
-        font = wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
+        font = wx.Font(14, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
         label_right.SetFont(font)
         vbox_right.Add(label_right, 0, wx.ALIGN_CENTER)
 
@@ -379,12 +379,26 @@ class SettingsDialog(wx.Dialog):
 
     def on_ok(self, event):
         # Обработка нажатия кнопки "OK"
-        save_path = self.text_save_to.GetValue()
-        forbidden_symbols = '*?\"<>|'
-
-        if not os.path.isabs(save_path) or any(char in forbidden_symbols for char in save_path):
-            wx.MessageBox("Пожалуйста, введите правильный путь к файлу.", "Некорректный путь", wx.OK | wx.ICON_ERROR)
+        # Проверка порога
+        if not (0 <= float(self.text_threshold.GetValue()) <= 0.999999):
+            wx.MessageBox("Значение минимального порога должно быть\nв пределах 0...0.999999.",
+                          "Неправильный порог", wx.OK | wx.ICON_ERROR)
             return
+
+        # Проверка точности
+        if not (0.0000001 <= float(self.text_precision.GetValue()) <= 0.1):
+            wx.MessageBox("Значение точности должно быть\nв пределах 0.0000001...0.1.",
+                          "Неправильный порог", wx.OK | wx.ICON_ERROR)
+            return
+
+        # Проверка пути сохранения файла
+        if self.checkbox_save_txt.GetValue():
+            save_path = self.text_save_to.GetValue()
+            forbidden_symbols = '*?\"<>|'
+
+            if not os.path.isabs(save_path) or any(char in forbidden_symbols for char in save_path):
+                wx.MessageBox("Введите правильный путь к файлу.", "Некорректный путь", wx.OK | wx.ICON_ERROR)
+                return
 
         # Сравнение текущих значений с загруженными
         threshold = float(self.text_threshold.GetValue())
