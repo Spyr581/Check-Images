@@ -21,7 +21,7 @@ class GUIUtils:
             return f"...{file_path[-(max_length - len(file_name)):]}"
 
 
-class MyDropTarget(wx.FileDropTarget, GUIUtils):
+class DropTarget(wx.FileDropTarget, GUIUtils):
     extensions = ['.jpg', '.png', '.webp']
 
     def __init__(self, window, l_filepaths):
@@ -59,9 +59,9 @@ class MyDropTarget(wx.FileDropTarget, GUIUtils):
         return True
 
 
-class MyFrame(wx.Frame, GUIUtils):
+class CIMainWindow(wx.Frame, GUIUtils):
     def __init__(self, parent, title):
-        super().__init__(parent, title=title, size=(1280, 720))
+        super().__init__(parent, title=title, size=(1280, 800))
 
         self.l_left_selection = []
         self.l_right_selection = []
@@ -73,20 +73,27 @@ class MyFrame(wx.Frame, GUIUtils):
         # Создаем панель
         panel = wx.Panel(self)
 
-        # Создаем вертикальный бокссайзер для разделения окна на три части
+        # Создаем общий вертикальный бокссайзер для разделения окна на три части
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         # Создаем горизонтальный бокссайзер для первых двух областей
         hbox_top = wx.BoxSizer(wx.HORIZONTAL)
 
-        # Левая часть (поле выбора и кнопки)
+        # Левая часть (название, поле выбора и кнопки)
         vbox_left = wx.BoxSizer(wx.VERTICAL)
+
+        label_left = wx.StaticText(panel, label="СКРИНШОТЫ")
+        font = wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
+        label_left.SetFont(font)
+        vbox_left.Add(label_left, 0, wx.ALIGN_CENTER)
+
+        # Создаем горизонтальный бокссайзер для поля выбора и кнопок слева
+        hbox_left = wx.BoxSizer(wx.HORIZONTAL)
+
         self.listbox_left = wx.ListBox(panel, choices=[], style=wx.LB_SINGLE, id=1)
         # Устанавливаем DropTarget
-        self.listbox_left.SetDropTarget(MyDropTarget(self.listbox_left, self.l_left_selection))
-        vbox_left.Add(self.listbox_left, 1, wx.EXPAND | wx.ALL, 5)
-
-        hbox_top.Add(vbox_left, 1, wx.EXPAND | wx.ALL, 5)
+        self.listbox_left.SetDropTarget(DropTarget(self.listbox_left, self.l_left_selection))
+        hbox_left.Add(self.listbox_left, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         # Кнопки +, -, Очистить для левого поля
         vbox_buttons_left = wx.BoxSizer(wx.VERTICAL)
@@ -94,18 +101,30 @@ class MyFrame(wx.Frame, GUIUtils):
         btn_minus_left = wx.Button(panel, label="-", size=(50, 30), id=11)
         btn_clear_left = wx.Button(panel, label="Очистить", size=(80, 30), id=12)
 
-        vbox_buttons_left.Add(btn_plus_left, 0, wx.EXPAND | wx.ALL, 5)
+        vbox_buttons_left.Add(btn_plus_left, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         vbox_buttons_left.Add(btn_minus_left, 0, wx.EXPAND | wx.ALL, 5)
-        vbox_buttons_left.Add(btn_clear_left, 0, wx.EXPAND | wx.ALL, 5)
+        vbox_buttons_left.Add(btn_clear_left, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
-        hbox_top.Add(vbox_buttons_left, 0, wx.EXPAND | wx.ALL, 5)
+        hbox_left.Add(vbox_buttons_left, 0, wx.EXPAND | wx.ALL, 5)
 
-        # Правая часть (поле выбора и кнопки)
+        vbox_left.Add(hbox_left, 1, wx.EXPAND)
+        hbox_top.Add(vbox_left, 1, wx.EXPAND | wx.ALL, 5)
+
+        # Правая часть (название, поле выбора и кнопки)
         vbox_right = wx.BoxSizer(wx.VERTICAL)
+
+        label_right = wx.StaticText(panel, label="КАРТИНКИ")
+        font = wx.Font(16, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
+        label_right.SetFont(font)
+        vbox_right.Add(label_right, 0, wx.ALIGN_CENTER)
+
+        # Создаем горизонтальный бокссайзер для поля выбора и кнопок справа
+        hbox_right = wx.BoxSizer(wx.HORIZONTAL)
+
         self.listbox_right = wx.ListBox(panel, choices=[], style=wx.LB_SINGLE, id=2)
         # Устанавливаем DropTarget
-        self.listbox_right.SetDropTarget(MyDropTarget(self.listbox_right, self.l_right_selection))
-        vbox_right.Add(self.listbox_right, 1, wx.EXPAND | wx.ALL, 5)
+        self.listbox_right.SetDropTarget(DropTarget(self.listbox_right, self.l_right_selection))
+        hbox_right.Add(self.listbox_right, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         # Кнопки +, -, Очистить для правого поля
         vbox_buttons_right = wx.BoxSizer(wx.VERTICAL)
@@ -113,12 +132,14 @@ class MyFrame(wx.Frame, GUIUtils):
         btn_minus_right = wx.Button(panel, label="-", size=(50, 30), id=21)
         btn_clear_right = wx.Button(panel, label="Очистить", size=(80, 30), id=22)
 
-        vbox_buttons_right.Add(btn_plus_right, 0, wx.EXPAND | wx.ALL, 5)
+        vbox_buttons_right.Add(btn_plus_right, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         vbox_buttons_right.Add(btn_minus_right, 0, wx.EXPAND | wx.ALL, 5)
-        vbox_buttons_right.Add(btn_clear_right, 0, wx.EXPAND | wx.ALL, 5)
+        vbox_buttons_right.Add(btn_clear_right, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
+        hbox_right.Add(vbox_buttons_right, 0, wx.EXPAND | wx.ALL, 5)
+
+        vbox_right.Add(hbox_right, 1, wx.EXPAND)
         hbox_top.Add(vbox_right, 1, wx.EXPAND | wx.ALL, 5)
-        hbox_top.Add(vbox_buttons_right, 0, wx.EXPAND | wx.ALL, 5)
 
         vbox.Add(hbox_top, 1, wx.EXPAND | wx.ALL, 5)
 
@@ -128,8 +149,8 @@ class MyFrame(wx.Frame, GUIUtils):
         btn_settings = wx.Button(panel, label="Настройки", size=(80, 30))
 
         hbox_bottom_buttons.AddStretchSpacer()
-        hbox_bottom_buttons.Add(btn_search, 0, wx.EXPAND | wx.ALL, 5)
-        hbox_bottom_buttons.Add(btn_settings, 0, wx.EXPAND | wx.ALL, 5)
+        hbox_bottom_buttons.Add(btn_search, 0, wx.EXPAND | wx.RIGHT, 20)
+        hbox_bottom_buttons.Add(btn_settings, 0, wx.EXPAND | wx.LEFT, 20)
         hbox_bottom_buttons.AddStretchSpacer()
 
         vbox.Add(hbox_bottom_buttons, 0, wx.EXPAND | wx.ALL, 5)
@@ -217,7 +238,7 @@ class MyFrame(wx.Frame, GUIUtils):
             self.l_right_selection.clear()
 
     def on_search(self, event):
-        self.console_text.AppendText("Button 'Искать' pressed\n")
+        CIGUILinker()
 
     def on_settings(self, event):
         self.console_text.AppendText("Button 'Настройки' pressed\n")
@@ -462,6 +483,12 @@ class SettingsDialog(wx.Dialog):
         self.loaded_save_txt_path = self.text_save_to.GetValue()
 
 
-app = wx.App(False)
-frame = MyFrame(None, "Check Images")
-app.MainLoop()
+class CIGUILinker:
+    def __init__(self):
+        pass
+
+
+if __name__ == '__main__':
+    app = wx.App(False)
+    frame = CIMainWindow(None, "Check Images")
+    app.MainLoop()
