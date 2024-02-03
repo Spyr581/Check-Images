@@ -1,4 +1,6 @@
 import os
+import configparser
+
 
 class BaseSettingsDescriptor:
     def __init__(self, default_value):
@@ -27,19 +29,19 @@ class SettingsDescriptor(BaseSettingsDescriptor):
 class SettingsData:
     _instance = None
 
-    default_threshold = BaseSettingsDescriptor(0.6)
+    default_min_threshold = BaseSettingsDescriptor(0.6)
     default_precision = BaseSettingsDescriptor(0.0001)
     default_check_direction = BaseSettingsDescriptor(0)
     default_embedded_folders = BaseSettingsDescriptor(False)
     default_save_txt = BaseSettingsDescriptor(True)
-    default_save_to = BaseSettingsDescriptor(os.path.join(os.getcwd(), 'threshold.txt'))
+    default_save_to = BaseSettingsDescriptor(os.path.join(os.getcwd(), 'thresholds.txt'))
 
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super().__new__(cls)
 
     def __init__(self):
-        self.threshold = SettingsDescriptor(None)
+        self.min_threshold = SettingsDescriptor(None)
         self.precision = SettingsDescriptor(None)
         self.check_direction = SettingsDescriptor(None)
         self.embedded_folders = SettingsDescriptor(None)
@@ -48,8 +50,8 @@ class SettingsData:
 
     def check_settings_on_load(self):
         # Проверка загружаемых настроек из ini файла
-        if not (0 <= float(self.threshold) <= 0.999999):
-            self.threshold = self.default_threshold
+        if not (0 <= float(self.min_threshold) <= 0.999999):
+            self.min_threshold = self.default_min_threshold
 
         if not (0.0000001 <= float(self.precision) <= 0.1):
             self.precision = self.default_precision
@@ -66,3 +68,30 @@ class SettingsData:
         forbidden_symbols = '*?\"<>|'
         if not os.path.isabs(self.save_to) or any(char in forbidden_symbols for char in self.save_to):
             self.save_to = self.default_save_to
+
+    def load_settings(self):
+        config = configparser.ConfigParser()
+
+        try:
+            # Пытаемся прочитать файл конфигурации
+            config.read('./check_images.ini')
+
+            # Получаем значения параметров из файла .ini
+            self.min_threshold = config.getfloat('Settings', 'MinThreshold')
+            self.precision = config.getfloat('Settings', 'Precision')
+            self.check_direction = config.getint('Settings', 'CheckDirection')
+            self.embedded_folders = config.getboolean('Settings', 'EmbeddedFolders')
+            self.save_txt = config.getboolean('Settings', 'SaveTxt')
+            self.save_to = config.get('Settings', 'SaveTo')
+
+            self.check_settings_on_load()
+
+        except (configparser.Error, FileNotFoundError):
+            # Если возникает ошибка, используем значения по умолчанию
+            self.min_threshold = self.default_min_threshold
+            self.precision = self.default_precision
+            self.check_direction = self.default_check_direction
+            self.embedded_folders = self.default_embedded_folders
+            self.save_txt = self.default_save_txt
+            self.save_to = self.default_save_to
+

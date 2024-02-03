@@ -111,7 +111,6 @@ class OutputInfo:
                  count_indent: int,
                  thr_indent: int,
                  coord_indent: int,
-                 # tmpl=None,
                  count=None,
                  x=None,
                  y=None):
@@ -135,16 +134,9 @@ class OutputInfo:
         self.__count_indent = count_indent
         self.__threshold_indent = thr_indent
         self.__coord_indent = coord_indent
-        # self.__tmpl = None if tmpl is None else self.__get_tmpl_name_with_subdirs(tmpl)
         self.__count = count if count is not None else ''
         self.__x = x
         self.__y = y
-
-    # def __get_tmpl_name_with_subdirs(self, tmpl: str) -> str:
-    #     if tmpl == '':
-    #         return tmpl
-    #     tmpl_name = tmpl.split(self.__path_to_tmpls)[1]
-    #     return tmpl_name[1:]   # Minus \ in begin filename
 
     def print_one_found_entry(self) -> str:
         one_entry = f'{self.__filename}{" " * (self.__tmpl_indent - len(self.__filename))}|' \
@@ -181,7 +173,7 @@ class CheckImages:
     __tmpls_dict = dict()   # {'D:\\Python\\Check Images\\tf': ['e.png', 't.png'], ...}
     __l_scr_img_gray = list()
 
-    def __init__(self, tmpl_paths: list, screen_imgs: list, min_threshold=0.6, precision=0.0001):
+    def __init__(self, tmpl_paths: list, screen_imgs: list, console, min_threshold=0.6, precision=0.0001):
         """
         :param path_to_tmpls:      str, path to one image file or folder with image files, folder can be insist
                                    subfolders with images templates
@@ -195,6 +187,7 @@ class CheckImages:
                                                                        # 1 - str, filename if the input is one file,
                                                                        # else - empty string
         self.__screen_imgs = screen_imgs
+        self.__console_window = console
         self.__min_threshold = min_threshold
         self.__precision = precision
         self.__output_preparing = None
@@ -257,6 +250,12 @@ class CheckImages:
                 f.writelines(header_info[0])    # ------------------------------------------------------
                 f.writelines(header_info[3])    # IMAGE           |COUNT   |THRESHOLD   |X       |Y
                 f.writelines(header_info[0])    # ------------------------------------------------------
+                self.__console_window.AppendText(header_info[0])
+                self.__console_window.AppendText(header_info[1])
+                self.__console_window.AppendText(header_info[2])
+                self.__console_window.AppendText(header_info[0])
+                self.__console_window.AppendText(header_info[3])
+                self.__console_window.AppendText(header_info[0])
 
                 d_found_tmpl = dict()   # ex.: {(994, 1): 0.66438675, (994, 2): 0.99708754, (994, 3): 0.6657746}
                 for tmpl_path in self.__tmpl_paths:
@@ -283,8 +282,9 @@ class CheckImages:
                                                              num_tmpls_found if 0 == idx else '',
                                                              x,
                                                              y)
-                            f.writelines(
-                                one_entry_to_output.print_one_found_entry())  # exit.webp    |  1     |0.8136      |994     |2
+                            one_entry = one_entry_to_output.print_one_found_entry()
+                            f.writelines(one_entry)  # exit.webp    |  1     |0.8136      |994     |2
+                            self.__console_window.AppendText(one_entry)
                     else:
                         one_entry_to_output = OutputInfo(os.path.basename(tmpl_path),
                                                          None,
@@ -296,9 +296,11 @@ class CheckImages:
                                                          count=0,
                                                          x=None,
                                                          y=None)
-                        f.writelines(one_entry_to_output.print_one_not_found_entry())  # fg_win.webp    |  0     |Not found   |None    |None
-
+                        one_entry = one_entry_to_output.print_one_not_found_entry()
+                        f.writelines(one_entry)  # fg_win.webp    |  0     |Not found   |None    |None
+                        self.__console_window.AppendText(one_entry)
                 f.writelines('\n\n')
+                self.__console_window.AppendText('\n\n')
 
     def run(self):
         self.__output_preparing = InitServiceOutputInfo(self.__tmpl_paths, self.__precision)
@@ -307,13 +309,3 @@ class CheckImages:
 
 if __name__ == '__main__':
     pass
-
-# # path_to_tmpls = 'D:\\My_documents\\Programming\\Python\\Check Images\\tf'
-# # scr_img_path = 'D:\\My_documents\\Programming\\Python\\Check Images\\i1_2.png'
-# path_to_tmpls = 'F:\\work\\autotest\\tests\\launcher\\l_screens\\games\\393'
-# scr_img_path = 'E:\\Video edit\\Capture\\bandicam 2022-12-29 14-21-03-483.png * ' \
-#                'E:\\Video edit\\Capture\\bandicam 2022-12-29 14-22-18-041.png * ' \
-#                'E:\\Video edit\\Capture\\bandicam 2022-12-30 16-10-28-959.png'
-#
-# check = CheckImages(path_to_tmpls, scr_img_path)
-# check.run()
