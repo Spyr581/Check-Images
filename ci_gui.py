@@ -5,57 +5,7 @@ import wx
 import os
 import configparser
 from ci import CheckImages
-
-
-class SettingsData:
-    _instance = None
-    __default_settings = {
-        'threshold': 0.6,
-        'precision': 0.0001,
-        'check_direction': 0,
-        'embedded_folders': False,
-        'save_txt': True,
-        'text_save_to': os.path.join(os.getcwd(), 'threshold.txt')
-    }
-    settings = None   # текущие валидные настройки
-
-    def __new__(cls, *args, **kwargs):
-        if not cls._instance:
-            cls._instance = super().__new__(cls)
-
-    # def __init__(self):
-    #     self.__threshold =
-
-    @property
-    def get_default_settings(self):
-        return self.__default_settings
-
-    @classmethod
-    def check_settings_on_load(cls, d_loaded):
-        # Проверка загружаемых настроек из ini файла
-        if not (0 <= float(d_loaded['threshold']) <= 0.999999):
-            d_loaded['threshold'] = cls.__default_settings['threshold']
-
-        if not (0.0000001 <= float(d_loaded['precision']) <= 0.1):
-            d_loaded['precision'] = cls.__default_settings['precision']
-
-        if not (0 == d_loaded['check_direction'] or 1 == d_loaded['check_direction']):
-            d_loaded['check_direction'] = cls.__default_settings['check_direction']
-
-        if not isinstance(d_loaded['embedded_folders'], bool):
-            d_loaded['embedded_folders'] = cls.__default_settings['embedded_folders']
-
-        if not isinstance(d_loaded['save_txt'], bool):
-            d_loaded['save_txt'] = cls.__default_settings['save_txt']
-
-        forbidden_symbols = '*?\"<>|'
-        if (
-                not os.path.isabs(d_loaded['text_save_to']) or
-                any(char in forbidden_symbols for char in d_loaded['text_save_to'])
-        ):
-            d_loaded['text_save_to'] = cls.__default_settings['text_save_to']
-
-        return d_loaded
+from settings import SettingsData
 
 
 class GUIUtils:
@@ -68,7 +18,6 @@ class GUIUtils:
 
     @staticmethod
     def format_file_name(file_path, max_length):
-        file_name = os.path.basename(file_path)
         if len(file_path) <= max_length:
             return file_path
         else:
@@ -551,39 +500,35 @@ class SettingsDialog(wx.Dialog, SettingsData):
             config.read('./check_images.ini')
 
             # Получаем значения параметров из файла .ini
-            d_settings = dict()
-            d_settings['threshold'] = config.getfloat('Settings', 'Threshold')
-            d_settings['precision'] = config.getfloat('Settings', 'Precision')
-            d_settings['check_direction'] = config.getint('Settings', 'CheckDirection')
-            d_settings['embedded_folders'] = config.getboolean('Settings', 'EmbeddedFolders')
-            d_settings['save_txt'] = config.getboolean('Settings', 'SaveTxt')
-            d_settings['text_save_to'] = config.get('Settings', 'TextSaveTo')
+            self.threshold = config.getfloat('Settings', 'Threshold')
+            self.precision = config.getfloat('Settings', 'Precision')
+            self.check_direction = config.getint('Settings', 'CheckDirection')
+            self.embedded_folders = config.getboolean('Settings', 'EmbeddedFolders')
+            self.save_txt = config.getboolean('Settings', 'SaveTxt')
+            self.save_to = config.get('Settings', 'TextSaveTo')
 
-            d_settings = self.check_settings_on_load(d_settings)
-            self.settings = d_settings
+            self.check_settings_on_load()
 
             # Устанавливаем значения в соответствующие элементы окна
-            self.text_threshold.SetValue(str(d_settings['threshold']))
-            self.text_precision.SetValue(str(d_settings['precision']))
-            self.dropdown_check_direction.SetSelection(d_settings['check_direction'])
-            self.checkbox_embedded_folders.SetValue(d_settings['embedded_folders'])
-            self.checkbox_save_txt.SetValue(d_settings['save_txt'])
-            self.text_save_to.SetValue(d_settings['text_save_to'])
+            self.text_threshold.SetValue(str(self.threshold))
+            self.text_precision.SetValue(str(self.precision))
+            self.dropdown_check_direction.SetSelection(self.check_direction)
+            self.checkbox_embedded_folders.SetValue(self.embedded_folders)
+            self.checkbox_save_txt.SetValue(self.save_txt)
+            self.text_save_to.SetValue(self.save_to)
 
             # Активируем/деактивируем текстовое поле и кнопку "Обзор"
-            self.text_save_to.Enable(d_settings['save_txt'])
-            self.btn_browse.Enable(d_settings['save_txt'])
+            self.text_save_to.Enable(self.save_txt)
+            self.btn_browse.Enable(self.save_txt)
 
         except (configparser.Error, FileNotFoundError):
             # Если возникает ошибка, используем значения по умолчанию
-            self.text_threshold.SetValue(str(self.get_default_settings['threshold']))
-            self.text_precision.SetValue(str(self.get_default_settings['precision']))
-            self.dropdown_check_direction.SetSelection(self.get_default_settings['check_direction'])
-            self.checkbox_embedded_folders.SetValue(self.get_default_settings['embedded_folders'])
-            self.checkbox_save_txt.SetValue(self.get_default_settings['save_txt'])
-            self.text_save_to.SetValue(self.get_default_settings['text_save_to'])
-
-            self.settings = self.get_default_settings
+            self.text_threshold.SetValue(str(self.default_threshold))
+            self.text_precision.SetValue(str(self.default_precision))
+            self.dropdown_check_direction.SetSelection(self.default_check_direction)
+            self.checkbox_embedded_folders.SetValue(self.default_embedded_folders)
+            self.checkbox_save_txt.SetValue(self.default_save_txt)
+            self.text_save_to.SetValue(self.default_save_to)
 
         self.d_loaded['threshold'] = float(self.text_threshold.GetValue())
         self.d_loaded['precision'] = float(self.text_precision.GetValue())
@@ -591,8 +536,6 @@ class SettingsDialog(wx.Dialog, SettingsData):
         self.d_loaded['embedded_folders'] = self.checkbox_embedded_folders.GetValue()
         self.d_loaded['save_txt'] = self.checkbox_save_txt.GetValue()
         self.d_loaded['text_save_to'] = self.text_save_to.GetValue()
-
-        self.d_loaded = self.check_settings_on_load(self.d_loaded)
 
 
 if __name__ == '__main__':
