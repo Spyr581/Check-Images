@@ -269,7 +269,7 @@ class CheckImages:
                     num_tmpls_found = len(all_points_list)
 
                     if num_tmpls_found > 0:
-                        for idx, coords_thr in enumerate(sorted(all_points_list, key=lambda a: a[1])):
+                        for idx, coords_thr in enumerate(sorted(all_points_list, key=lambda a: a[1], reverse=True)):
                             x, y = int(coords_thr[0][0]), int(coords_thr[0][1])
                             threshold = float(self.__round_threshold(coords_thr[1]))
                             one_entry_to_output = OutputInfo(os.path.basename(tmpl_path) if 0 == idx else '',

@@ -84,16 +84,21 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
         self.l_left_selection = []
         self.l_right_selection = []
 
-        self.tooltip = wx.ToolTip("")
         self.last_selected_index_left = wx.NOT_FOUND
         self.last_selected_index_right = wx.NOT_FOUND
 
         self.load_settings()
 
-        # Создаем панель
-        panel = wx.Panel(self)
+        # Создаем горизонтальный разделитель и две панели, которые он будет разделять
+        splitter = wx.SplitterWindow(self, wx.ID_ANY, style=wx.SP_3D)
+        panel_top = wx.Panel(splitter, wx.ID_ANY)
+        panel_bottom = wx.Panel(splitter, wx.ID_ANY)
 
-        # Создаем общий вертикальный бокссайзер для разделения окна на три части
+        # Устанавливаем минимальный размер для каждой из панелей (чтобы не утянуть разделитель к краю окна)
+        splitter.SetMinimumPaneSize(50)
+
+        # Создаем горизотнтальный и вертикальный сайзеры
+        hbox = wx.BoxSizer(wx.HORIZONTAL)
         vbox = wx.BoxSizer(wx.VERTICAL)
 
         # Создаем горизонтальный бокссайзер для первых двух областей
@@ -102,7 +107,7 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
         # Левая часть (название, поле выбора и кнопки)
         vbox_left = wx.BoxSizer(wx.VERTICAL)
 
-        label_left = wx.StaticText(panel, label="СКРИНШОТЫ")
+        label_left = wx.StaticText(panel_top, label="СКРИНШОТЫ")
         font = wx.Font(14, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
         label_left.SetFont(font)
         vbox_left.Add(label_left, 0, wx.ALIGN_CENTER)
@@ -110,16 +115,16 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
         # Создаем горизонтальный бокссайзер для поля выбора и кнопок слева
         hbox_left = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.listbox_left = wx.ListBox(panel, choices=[], style=wx.LB_SINGLE, id=1)
+        self.listbox_left = wx.ListBox(panel_top, choices=[], style=wx.LB_SINGLE, id=1)
         # Устанавливаем DropTarget
         self.listbox_left.SetDropTarget(DropTarget(self.listbox_left, self.l_left_selection))
         hbox_left.Add(self.listbox_left, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         # Кнопки +, -, Очистить для левого поля
         vbox_buttons_left = wx.BoxSizer(wx.VERTICAL)
-        btn_plus_left = wx.Button(panel, label="+", size=(50, 30), id=10)
-        btn_minus_left = wx.Button(panel, label="-", size=(50, 30), id=11)
-        btn_clear_left = wx.Button(panel, label="Очистить", size=(80, 30), id=12)
+        btn_plus_left = wx.Button(panel_top, label="+", size=(50, 30), id=10)
+        btn_minus_left = wx.Button(panel_top, label="-", size=(50, 30), id=11)
+        btn_clear_left = wx.Button(panel_top, label="Очистить", size=(80, 30), id=12)
 
         vbox_buttons_left.Add(btn_plus_left, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         vbox_buttons_left.Add(btn_minus_left, 0, wx.EXPAND | wx.ALL, 5)
@@ -133,7 +138,7 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
         # Правая часть (название, поле выбора и кнопки)
         vbox_right = wx.BoxSizer(wx.VERTICAL)
 
-        label_right = wx.StaticText(panel, label="КАРТИНКИ")
+        label_right = wx.StaticText(panel_top, label="КАРТИНКИ")
         font = wx.Font(14, wx.DEFAULT, wx.NORMAL, wx.NORMAL)
         label_right.SetFont(font)
         vbox_right.Add(label_right, 0, wx.ALIGN_CENTER)
@@ -141,16 +146,16 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
         # Создаем горизонтальный бокссайзер для поля выбора и кнопок справа
         hbox_right = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.listbox_right = wx.ListBox(panel, choices=[], style=wx.LB_SINGLE, id=2)
+        self.listbox_right = wx.ListBox(panel_top, choices=[], style=wx.LB_SINGLE, id=2)
         # Устанавливаем DropTarget
         self.listbox_right.SetDropTarget(DropTarget(self.listbox_right, self.l_right_selection))
         hbox_right.Add(self.listbox_right, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         # Кнопки +, -, Очистить для правого поля
         vbox_buttons_right = wx.BoxSizer(wx.VERTICAL)
-        btn_plus_right = wx.Button(panel, label="+", size=(50, 30), id=20)
-        btn_minus_right = wx.Button(panel, label="-", size=(50, 30), id=21)
-        btn_clear_right = wx.Button(panel, label="Очистить", size=(80, 30), id=22)
+        btn_plus_right = wx.Button(panel_top, label="+", size=(50, 30), id=20)
+        btn_minus_right = wx.Button(panel_top, label="-", size=(50, 30), id=21)
+        btn_clear_right = wx.Button(panel_top, label="Очистить", size=(80, 30), id=22)
 
         vbox_buttons_right.Add(btn_plus_right, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         vbox_buttons_right.Add(btn_minus_right, 0, wx.EXPAND | wx.ALL, 5)
@@ -161,27 +166,44 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
         vbox_right.Add(hbox_right, 1, wx.EXPAND)
         hbox_top.Add(vbox_right, 1, wx.EXPAND | wx.ALL, 5)
 
-        vbox.Add(hbox_top, 1, wx.EXPAND | wx.ALL, 5)
+        # Добавляем получившиеся элементы в вертикальный сайзер
+        vbox.Add(hbox_top, 1, wx.EXPAND)
 
-        # Кнопки "Искать" и "Настройки" (расположены посередине)
+        # Кнопки "Искать", "Очистить", "Настройки"
         hbox_bottom_buttons = wx.BoxSizer(wx.HORIZONTAL)
-        btn_search = wx.Button(panel, label="Искать", size=(80, 30))
-        btn_settings = wx.Button(panel, label="Настройки", size=(80, 30))
+        btn_search = wx.Button(panel_top, label="Искать", size=(80, 30))
+        btn_clear_bottom = wx.Button(panel_top, label="Очистить", size=(80, 30))
+        btn_settings = wx.Button(panel_top, label="Настройки", size=(80, 30))
 
         hbox_bottom_buttons.AddStretchSpacer()
-        hbox_bottom_buttons.Add(btn_search, 0, wx.EXPAND | wx.RIGHT, 20)
-        hbox_bottom_buttons.Add(btn_settings, 0, wx.EXPAND | wx.LEFT, 20)
+        hbox_bottom_buttons.Add(btn_search, 0, wx.EXPAND | wx.RIGHT, 15)
+        hbox_bottom_buttons.Add(btn_clear_bottom, 0, wx.EXPAND | wx.RIGHT | wx.LEFT, 15)
+        hbox_bottom_buttons.Add(btn_settings, 0, wx.EXPAND | wx.LEFT, 100)
         hbox_bottom_buttons.AddStretchSpacer()
 
-        vbox.Add(hbox_bottom_buttons, 0, wx.EXPAND | wx.ALL, 5)
+        # Добавляем в вертикальный сайзер еще кнопки
+        vbox.Add(hbox_bottom_buttons, 0, wx.EXPAND | wx.TOP, 10)
 
-        # Создаем третью область под первой и второй
-        self.console_text = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.HSCROLL)
+        # Кидаем вертикальный сайзер в горизонтальный, чтобы работал разделитель
+        hbox.Add(vbox, 1, wx.EXPAND)
+
+        # Привязываемся к верхней панели
+        panel_top.SetSizer(hbox)
+
+        # Создаем нижнюю область
+        sizer_bottom = wx.BoxSizer(wx.HORIZONTAL)
+        self.console_text = wx.TextCtrl(panel_bottom, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.HSCROLL)
         self.console_text.SetFont(wx.Font(wx.FontInfo(12).Family(wx.FONTFAMILY_TELETYPE)))
-        vbox.Add(self.console_text, 1, wx.EXPAND | wx.ALL, 5)
+        sizer_bottom.Add(self.console_text, 1, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        panel_bottom.SetSizer(sizer_bottom)
 
-        # Устанавливаем бокссайзер для панели
-        panel.SetSizer(vbox)
+        # Устанавливаем вертикальное разделение между верхней и нижней панелями, число - это размер верхней панели
+        splitter.SplitHorizontally(panel_top, panel_bottom, 300)
+
+        # Создаем бокс-сайзер для размещения SplitterWindow в основном окне
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(splitter, 1, wx.EXPAND)
+        self.SetSizer(sizer)
 
         # Установка/снятие выбора в списке
         self.listbox_left.Bind(wx.EVT_LEFT_UP, self.on_left_click)
@@ -200,8 +222,7 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
         self.Bind(wx.EVT_BUTTON, self.on_clear, btn_clear_right)
 
         self.Bind(wx.EVT_BUTTON, self.on_search, btn_search)
-        self.Bind(wx.EVT_BUTTON, self.on_settings, btn_settings)
-
+        self.Bind(wx.EVT_BUTTON, self.on_clear_bottom, btn_clear_bottom)
         self.Bind(wx.EVT_BUTTON, self.show_settings_dialog, btn_settings)
 
         self.Centre()
@@ -253,13 +274,16 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
             self.l_right_selection.clear()
 
     def on_search(self, event):
+        if not self.l_left_selection or not self.l_right_selection:
+            return
+
         scr_paths = [double_path[0] for double_path in self.l_left_selection]
         tmpl_paths = [double_path[0] for double_path in self.l_right_selection]
         check = CheckImages(tmpl_paths, scr_paths, self.console_text, self.min_threshold, self.precision)
         check.run()
 
-    def on_settings(self, event):
-        self.console_text.AppendText("Button 'Настройки' pressed\n")
+    def on_clear_bottom(self, event):
+        self.console_text.SetValue("")
 
     def on_left_click(self, event):
         # Получаем координаты мыши
@@ -370,7 +394,7 @@ class SettingsDialog(wx.Dialog, SettingsData):
         hbox_btns.Add(btn_cancel, 0, wx.LEFT, 20)
         vbox.Add(hbox_btns, 0, wx.ALIGN_CENTER | wx.BOTTOM, 20)
 
-        self.load_settings()
+        self.set_window_settings()
         panel.SetSizer(vbox)
         self.Centre()
 
@@ -491,7 +515,7 @@ class SettingsDialog(wx.Dialog, SettingsData):
         with open('./check_images.ini', 'w') as configfile:
             config.write(configfile)
 
-    def load_settings(self):
+    def set_window_settings(self):
         self.load_settings()
 
         # Устанавливаем значения в соответствующие элементы окна
