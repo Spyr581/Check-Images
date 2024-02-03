@@ -1,6 +1,61 @@
+# Check images by OpenCV with GUI
+# Version 1.0
+
 import wx
 import os
 import configparser
+from ci import CheckImages
+
+
+class SettingsData:
+    _instance = None
+    __default_settings = {
+        'threshold': 0.6,
+        'precision': 0.0001,
+        'check_direction': 0,
+        'embedded_folders': False,
+        'save_txt': True,
+        'text_save_to': os.path.join(os.getcwd(), 'threshold.txt')
+    }
+    settings = None   # текущие валидные настройки
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super().__new__(cls)
+
+    # def __init__(self):
+    #     self.__threshold =
+
+    @property
+    def get_default_settings(self):
+        return self.__default_settings
+
+    @classmethod
+    def check_settings_on_load(cls, d_loaded):
+        # Проверка загружаемых настроек из ini файла
+        if not (0 <= float(d_loaded['threshold']) <= 0.999999):
+            d_loaded['threshold'] = cls.__default_settings['threshold']
+
+        if not (0.0000001 <= float(d_loaded['precision']) <= 0.1):
+            d_loaded['precision'] = cls.__default_settings['precision']
+
+        if not (0 == d_loaded['check_direction'] or 1 == d_loaded['check_direction']):
+            d_loaded['check_direction'] = cls.__default_settings['check_direction']
+
+        if not isinstance(d_loaded['embedded_folders'], bool):
+            d_loaded['embedded_folders'] = cls.__default_settings['embedded_folders']
+
+        if not isinstance(d_loaded['save_txt'], bool):
+            d_loaded['save_txt'] = cls.__default_settings['save_txt']
+
+        forbidden_symbols = '*?\"<>|'
+        if (
+                not os.path.isabs(d_loaded['text_save_to']) or
+                any(char in forbidden_symbols for char in d_loaded['text_save_to'])
+        ):
+            d_loaded['text_save_to'] = cls.__default_settings['text_save_to']
+
+        return d_loaded
 
 
 class GUIUtils:
@@ -12,21 +67,33 @@ class GUIUtils:
         return any(f == item[0] for item in any_list)
 
     @staticmethod
-    def format_file_name(file_path):
-        max_length = 60  # Максимальная длина строки для отображения пути
+    def format_file_name(file_path, max_length):
         file_name = os.path.basename(file_path)
         if len(file_path) <= max_length:
             return file_path
         else:
-            return f"...{file_path[-(max_length - len(file_name)):]}"
+            return f"...{file_path[-max_length:]}"
+
+    def get_max_text_length(self, element, file_path):
+        # Получим размер текста в пикселях
+        text_width, text_height = element.GetTextExtent(file_path)
+        # Получим ширину списка в пикселях
+        listbox_width = element.GetSize().GetWidth()
+        # Определим и вернем, сколько символов влезет в ширину списка
+        max_width = int(listbox_width / (text_width / len(file_path)))
+        # Поправка
+        if max_width >= 8:
+            max_width = max_width - 8
+
+        return max_width
 
 
 class DropTarget(wx.FileDropTarget, GUIUtils):
     extensions = ['.jpg', '.png', '.webp']
 
-    def __init__(self, window, l_filepaths):
+    def __init__(self, element, l_filepaths):
         super().__init__()
-        self.window = window
+        self.element = element
         self.l_filepaths = l_filepaths
 
     @classmethod
@@ -45,16 +112,18 @@ class DropTarget(wx.FileDropTarget, GUIUtils):
                     if self.check_file_presence(file_in_folder, self.l_filepaths):
                         continue
                     full_filename = os.path.join(filename, file_in_folder)
-                    short_path = self.format_file_name(full_filename)
-                    self.window.Append(short_path)
+                    max_length = self.get_max_text_length(self.element, full_filename)
+                    short_path = self.format_file_name(full_filename, max_length)
+                    self.element.Append(short_path)
                     self.l_filepaths.append((full_filename, short_path))
             else:
                 if not self.check_file_extension(filename):
                     continue
                 if self.check_file_presence(filename, self.l_filepaths):
                     continue
-                short_path = self.format_file_name(filename)
-                self.window.Append(short_path)
+                max_length = self.get_max_text_length(self.element, filename)
+                short_path = self.format_file_name(filename, max_length)
+                self.element.Append(short_path)
                 self.l_filepaths.append((filename, short_path))
         return True
 
@@ -163,12 +232,15 @@ class CIMainWindow(wx.Frame, GUIUtils):
         panel.SetSizer(vbox)
 
         # Устанавливаем обработчики событий для выбора элементов в левом и правом полях
-        self.Bind(wx.EVT_LISTBOX, self.on_left_selection, self.listbox_left)
-        self.Bind(wx.EVT_LISTBOX, self.on_right_selection, self.listbox_right)
+        # self.Bind(wx.EVT_LISTBOX, self.on_left_selection, self.listbox_left)
+        # self.Bind(wx.EVT_LISTBOX, self.on_right_selection, self.listbox_right)
 
         # Установка/снятие выбора в списке
         self.listbox_left.Bind(wx.EVT_LEFT_UP, self.on_left_click)
         self.listbox_right.Bind(wx.EVT_LEFT_UP, self.on_left_click)
+
+        # Изменение ширины листбокса
+        self.Bind(wx.EVT_SIZE, self.on_size)
 
         # Устанавливаем обработчики событий для кнопок
         self.Bind(wx.EVT_BUTTON, self.on_plus, btn_plus_left)
@@ -187,13 +259,13 @@ class CIMainWindow(wx.Frame, GUIUtils):
         self.Centre()
         self.Show(True)
 
-    def on_left_selection(self, event):
-        selected_item = self.listbox_left.GetStringSelection()
-        self.console_text.AppendText(f"Selected from left: {selected_item}\n")
-
-    def on_right_selection(self, event):
-        selected_item = self.listbox_right.GetStringSelection()
-        self.console_text.AppendText(f"Selected from right: {selected_item}\n")
+    # def on_left_selection(self, event):
+    #     selected_item = self.listbox_left.GetStringSelection()
+    #     self.console_text.AppendText(f"Selected from left: {selected_item}\n")
+    #
+    # def on_right_selection(self, event):
+    #     selected_item = self.listbox_right.GetStringSelection()
+    #     self.console_text.AppendText(f"Selected from right: {selected_item}\n")
 
     def on_plus(self, event):
         button_id = event.GetEventObject().GetId()
@@ -202,12 +274,14 @@ class CIMainWindow(wx.Frame, GUIUtils):
         if dialog.ShowModal() == wx.ID_OK:
             selected_files = dialog.GetPaths()
             for file_path in selected_files:
-
-                short_path = self.format_file_name(file_path)
                 if button_id == 10:
+                    max_length = self.get_max_text_length(self.listbox_left, file_path)
+                    short_path = self.format_file_name(file_path, max_length)
                     self.listbox_left.Append(short_path)
                     self.l_left_selection.append((file_path, short_path))
                 elif button_id == 20:
+                    max_length = self.get_max_text_length(self.listbox_right, file_path)
+                    short_path = self.format_file_name(file_path, max_length)
                     self.listbox_right.Append(short_path)
                     self.l_right_selection.append((file_path, short_path))
         dialog.Destroy()
@@ -238,7 +312,10 @@ class CIMainWindow(wx.Frame, GUIUtils):
             self.l_right_selection.clear()
 
     def on_search(self, event):
-        CIGUILinker()
+        scr_paths = [double_path[0] for double_path in self.l_left_selection]
+        tmpl_paths = [double_path[0] for double_path in self.l_right_selection]
+        check = CheckImages(tmpl_paths, scr_paths, 0.6, 0.0001)
+        check.run()
 
     def on_settings(self, event):
         self.console_text.AppendText("Button 'Настройки' pressed\n")
@@ -246,7 +323,6 @@ class CIMainWindow(wx.Frame, GUIUtils):
     def on_left_click(self, event):
         # Получаем координаты мыши
         x, y = event.GetPosition()
-        print(x, y)
         selected_id = event.GetId()
 
         # Если индекс совпадает с последним выбранным, снимаем выделение
@@ -272,6 +348,19 @@ class CIMainWindow(wx.Frame, GUIUtils):
 
         event.Skip()
 
+    def on_size(self, event):
+        for idx, filepaths in enumerate(self.l_left_selection):   # filepaths - это кортеж, нужен 0 элемент
+            max_length = self.get_max_text_length(self.listbox_left, filepaths[0])
+            short_path = self.format_file_name(filepaths[0], max_length)
+            self.listbox_left.SetString(idx, short_path)
+
+        for idx, filepaths in enumerate(self.l_right_selection):   # filepaths - это кортеж, нужен 0 элемент
+            max_length = self.get_max_text_length(self.listbox_right, filepaths[0])
+            short_path = self.format_file_name(filepaths[0], max_length)
+            self.listbox_left.SetString(idx, short_path)
+
+        event.Skip()
+
     def show_settings_dialog(self, event):
         # Создание и отображение диалогового окна
         dlg = SettingsDialog(self, title="Настройки", size=(640, 400))
@@ -279,10 +368,11 @@ class CIMainWindow(wx.Frame, GUIUtils):
         dlg.Destroy()
 
 
-class SettingsDialog(wx.Dialog):
+class SettingsDialog(wx.Dialog, SettingsData):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
+        self.d_loaded = dict()
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
         gbs = wx.GridBagSizer(9, 6)   # row, col
@@ -300,18 +390,19 @@ class SettingsDialog(wx.Dialog):
         gbs.Add(self.text_precision, pos=(1, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Выпадающий список
-        label_dropdown = wx.StaticText(panel, label="Направление поиска")
+        dropdown_check_direction = wx.StaticText(panel, label="Направление поиска")
         choices = ["Картинки по скриншотам", "Скриншоты по картинкам"]
-        self.dropdown = wx.Choice(panel, choices=choices)
+        self.dropdown_check_direction = wx.Choice(panel, choices=choices)
         # self.dropdown.SetSelection(0)
-        gbs.Add(label_dropdown, pos=(2, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(self.dropdown, pos=(2, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(dropdown_check_direction, pos=(2, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(self.dropdown_check_direction, pos=(2, 2), span=(1, 3),
+                flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Галочка "Учитывать вложенные папки"
-        label_checkbox_folders = wx.StaticText(panel, label="Учитывать вложенные папки")
-        self.checkbox_nested_folders = wx.CheckBox(panel)
-        gbs.Add(label_checkbox_folders, pos=(3, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(self.checkbox_nested_folders, pos=(3, 2), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        label_checkbox_embedded_folders = wx.StaticText(panel, label="Учитывать вложенные папки")
+        self.checkbox_embedded_folders = wx.CheckBox(panel)
+        gbs.Add(label_checkbox_embedded_folders, pos=(3, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(self.checkbox_embedded_folders, pos=(3, 2), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Галочка "Сохранять txt файл"
         label_checkbox_save_txt = wx.StaticText(panel, label="Сохранять txt файл")
@@ -403,18 +494,18 @@ class SettingsDialog(wx.Dialog):
         # Сравнение текущих значений с загруженными
         threshold = float(self.text_threshold.GetValue())
         precision = float(self.text_precision.GetValue())
-        dropdown_selection = self.dropdown.GetSelection()
-        nested_folders_checked = self.checkbox_nested_folders.GetValue()
-        save_txt_checked = self.checkbox_save_txt.GetValue()
-        save_txt_path = self.text_save_to.GetValue()
+        check_direction = self.dropdown_check_direction.GetSelection()
+        embedded_folders = self.checkbox_embedded_folders.GetValue()
+        save_txt = self.checkbox_save_txt.GetValue()
+        text_save_to = self.text_save_to.GetValue()
 
         if (
-                threshold != self.loaded_threshold or
-                precision != self.loaded_precision or
-                dropdown_selection != self.loaded_dropdown_selection or
-                nested_folders_checked != self.loaded_nested_folders_checked or
-                save_txt_checked != self.loaded_save_txt_checked or
-                save_txt_path != self.loaded_save_txt_path
+                threshold != self.d_loaded['threshold'] or
+                precision != self.d_loaded['precision'] or
+                check_direction != self.d_loaded['check_direction'] or
+                embedded_folders != self.d_loaded['embedded_folders'] or
+                save_txt != self.d_loaded['save_txt'] or
+                text_save_to != self.d_loaded['text_save_to']
         ):
             # Если значения отличаются, сохраняем изменения в файл конфигурации
             self.save_settings()
@@ -442,10 +533,10 @@ class SettingsDialog(wx.Dialog):
         config['Settings'] = {
             'Threshold': self.text_threshold.GetValue(),
             'Precision': self.text_precision.GetValue(),
-            'DropdownSelection': str(self.dropdown.GetSelection()),
-            'NestedFoldersChecked': str(self.checkbox_nested_folders.GetValue()),
-            'SaveTxtChecked': str(self.checkbox_save_txt.GetValue()),
-            'SaveTxtPath': self.text_save_to.GetValue(),
+            'CheckDirection': str(self.dropdown_check_direction.GetSelection()),
+            'EmbeddedFolders': str(self.checkbox_embedded_folders.GetValue()),
+            'SaveTxt': str(self.checkbox_save_txt.GetValue()),
+            'TextSaveTo': self.text_save_to.GetValue(),
         }
 
         # Сохраняем конфигурацию в файл
@@ -460,46 +551,48 @@ class SettingsDialog(wx.Dialog):
             config.read('./check_images.ini')
 
             # Получаем значения параметров из файла .ini
-            threshold = config.getfloat('Settings', 'Threshold')
-            precision = config.getfloat('Settings', 'Precision')
-            dropdown_selection = config.getint('Settings', 'DropdownSelection')
-            nested_folders_checked = config.getboolean('Settings', 'NestedFoldersChecked')
-            save_txt_checked = config.getboolean('Settings', 'SaveTxtChecked')
-            save_txt_path = config.get('Settings', 'SaveTxtPath')
+            d_settings = dict()
+            d_settings['threshold'] = config.getfloat('Settings', 'Threshold')
+            d_settings['precision'] = config.getfloat('Settings', 'Precision')
+            d_settings['check_direction'] = config.getint('Settings', 'CheckDirection')
+            d_settings['embedded_folders'] = config.getboolean('Settings', 'EmbeddedFolders')
+            d_settings['save_txt'] = config.getboolean('Settings', 'SaveTxt')
+            d_settings['text_save_to'] = config.get('Settings', 'TextSaveTo')
+
+            d_settings = self.check_settings_on_load(d_settings)
+            self.settings = d_settings
 
             # Устанавливаем значения в соответствующие элементы окна
-            self.text_threshold.SetValue(str(threshold))
-            self.text_precision.SetValue(str(precision))
-            self.dropdown.SetSelection(dropdown_selection)
-            self.checkbox_nested_folders.SetValue(nested_folders_checked)
-            self.checkbox_save_txt.SetValue(save_txt_checked)
-            self.text_save_to.SetValue(save_txt_path)
+            self.text_threshold.SetValue(str(d_settings['threshold']))
+            self.text_precision.SetValue(str(d_settings['precision']))
+            self.dropdown_check_direction.SetSelection(d_settings['check_direction'])
+            self.checkbox_embedded_folders.SetValue(d_settings['embedded_folders'])
+            self.checkbox_save_txt.SetValue(d_settings['save_txt'])
+            self.text_save_to.SetValue(d_settings['text_save_to'])
 
             # Активируем/деактивируем текстовое поле и кнопку "Обзор"
-            self.text_save_to.Enable(save_txt_checked)
-            self.btn_browse.Enable(save_txt_checked)
+            self.text_save_to.Enable(d_settings['save_txt'])
+            self.btn_browse.Enable(d_settings['save_txt'])
 
         except (configparser.Error, FileNotFoundError):
             # Если возникает ошибка, используем значения по умолчанию
-            self.text_threshold.SetValue('0.6')
-            self.text_precision.SetValue('0.0001')
-            self.dropdown.SetSelection(0)
-            self.checkbox_nested_folders.SetValue(False)
-            self.checkbox_save_txt.SetValue(True)
-            folder = os.path.abspath(os.curdir)
-            self.text_save_to.SetValue(os.path.join(folder, 'thresholds.txt'))
+            self.text_threshold.SetValue(str(self.get_default_settings['threshold']))
+            self.text_precision.SetValue(str(self.get_default_settings['precision']))
+            self.dropdown_check_direction.SetSelection(self.get_default_settings['check_direction'])
+            self.checkbox_embedded_folders.SetValue(self.get_default_settings['embedded_folders'])
+            self.checkbox_save_txt.SetValue(self.get_default_settings['save_txt'])
+            self.text_save_to.SetValue(self.get_default_settings['text_save_to'])
 
-        self.loaded_threshold = float(self.text_threshold.GetValue())
-        self.loaded_precision = float(self.text_precision.GetValue())
-        self.loaded_dropdown_selection = self.dropdown.GetSelection()
-        self.loaded_nested_folders_checked = self.checkbox_nested_folders.GetValue()
-        self.loaded_save_txt_checked = self.checkbox_save_txt.GetValue()
-        self.loaded_save_txt_path = self.text_save_to.GetValue()
+            self.settings = self.get_default_settings
 
+        self.d_loaded['threshold'] = float(self.text_threshold.GetValue())
+        self.d_loaded['precision'] = float(self.text_precision.GetValue())
+        self.d_loaded['check_direction'] = self.dropdown_check_direction.GetSelection()
+        self.d_loaded['embedded_folders'] = self.checkbox_embedded_folders.GetValue()
+        self.d_loaded['save_txt'] = self.checkbox_save_txt.GetValue()
+        self.d_loaded['text_save_to'] = self.text_save_to.GetValue()
 
-class CIGUILinker:
-    def __init__(self):
-        pass
+        self.d_loaded = self.check_settings_on_load(self.d_loaded)
 
 
 if __name__ == '__main__':
