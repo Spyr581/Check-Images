@@ -5,7 +5,7 @@ import wx
 import os
 import configparser
 from ci import CheckImages
-from settings import SettingsData
+from settings import SettingsData, SettingsUtils
 
 
 class GUIUtils:
@@ -77,7 +77,7 @@ class DropTarget(wx.FileDropTarget, GUIUtils):
         return True
 
 
-class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
+class CIMainWindow(wx.Frame, GUIUtils, SettingsUtils):
     def __init__(self, parent, title):
         super().__init__(parent, title=title, size=(1280, 800))
 
@@ -87,6 +87,7 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
         self.last_selected_index_left = wx.NOT_FOUND
         self.last_selected_index_right = wx.NOT_FOUND
 
+        self.settings = SettingsData()
         self.load_settings()
 
         # Создаем горизонтальный разделитель и две панели, которые он будет разделять
@@ -279,7 +280,13 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
 
         scr_paths = [double_path[0] for double_path in self.l_left_selection]
         tmpl_paths = [double_path[0] for double_path in self.l_right_selection]
-        check = CheckImages(tmpl_paths, scr_paths, self.console_text, self.min_threshold, self.precision)
+        print(f'on search: {self.settings.check_direction=}, {id(self.settings.check_direction)=}')
+        check = CheckImages(tmpl_paths,
+                            scr_paths,
+                            self.console_text,
+                            self.settings.min_threshold,
+                            self.settings.precision,
+                            self.settings.check_direction)
         check.run()
 
     def on_clear_bottom(self, event):
@@ -333,10 +340,11 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
         dlg.Destroy()
 
 
-class SettingsDialog(wx.Dialog, SettingsData):
+class SettingsDialog(wx.Dialog, SettingsUtils):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
+        self.settings = SettingsData()
         self.d_loaded = dict()
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
@@ -462,7 +470,7 @@ class SettingsDialog(wx.Dialog, SettingsData):
         check_direction = self.dropdown_check_direction.GetSelection()
         embedded_folders = self.checkbox_embedded_folders.GetValue()
         save_txt = self.checkbox_save_txt.GetValue()
-        text_save_to = self.text_save_to.GetValue()
+        save_to = self.text_save_to.GetValue()
 
         if (
                 min_threshold != self.d_loaded['min_threshold'] or
@@ -470,11 +478,12 @@ class SettingsDialog(wx.Dialog, SettingsData):
                 check_direction != self.d_loaded['check_direction'] or
                 embedded_folders != self.d_loaded['embedded_folders'] or
                 save_txt != self.d_loaded['save_txt'] or
-                text_save_to != self.d_loaded['text_save_to']
+                save_to != self.d_loaded['save_to']
         ):
             # Если значения отличаются, сохраняем изменения в файл конфигурации
-            self.save_settings()
+            self.save_settings(min_threshold, precision, check_direction, embedded_folders, save_txt, save_to)
 
+        print(f'on ok: {self.settings.check_direction=}, {id(self.settings.check_direction)=}')
         self.EndModal(wx.ID_OK)
 
     def on_cancel(self, event):
@@ -491,51 +500,27 @@ class SettingsDialog(wx.Dialog, SettingsData):
         self.text_save_to.Enable(is_checked)
         self.btn_browse.Enable(is_checked)
 
-    def save_settings(self):
-        config = configparser.ConfigParser()
-
-        self.min_threshold = self.text_threshold.GetValue()
-        self.text_precision = self.text_precision.GetValue()
-        self.check_direction = self.dropdown_check_direction.GetSelection()
-        self.embedded_folders = self.checkbox_embedded_folders.GetValue()
-        self.save_txt = self.checkbox_save_txt.GetValue()
-        self.save_to = self.text_save_to.GetValue()
-
-        # Устанавливаем значения параметров
-        config['Settings'] = {
-            'MinThreshold': self.min_threshold,
-            'Precision': self.text_precision,
-            'CheckDirection': str(self.check_direction),
-            'EmbeddedFolders': str(self.embedded_folders),
-            'SaveTxt': str(self.save_txt),
-            'SaveTo': self.save_to,
-        }
-
-        # Сохраняем конфигурацию в файл
-        with open('./check_images.ini', 'w') as configfile:
-            config.write(configfile)
-
     def set_window_settings(self):
         self.load_settings()
 
         # Устанавливаем значения в соответствующие элементы окна
-        self.text_threshold.SetValue(str(self.min_threshold))
-        self.text_precision.SetValue(str(self.precision))
-        self.dropdown_check_direction.SetSelection(self.check_direction)
-        self.checkbox_embedded_folders.SetValue(self.embedded_folders)
-        self.checkbox_save_txt.SetValue(self.save_txt)
-        self.text_save_to.SetValue(self.save_to)
+        self.text_threshold.SetValue(str(self.settings.min_threshold))
+        self.text_precision.SetValue(str(self.settings.precision))
+        self.dropdown_check_direction.SetSelection(self.settings.check_direction)
+        self.checkbox_embedded_folders.SetValue(self.settings.embedded_folders)
+        self.checkbox_save_txt.SetValue(self.settings.save_txt)
+        self.text_save_to.SetValue(self.settings.save_to)
 
         # Активируем/деактивируем текстовое поле и кнопку "Обзор"
-        self.text_save_to.Enable(self.save_txt)
-        self.btn_browse.Enable(self.save_txt)
+        self.text_save_to.Enable(self.settings.save_txt)
+        self.btn_browse.Enable(self.settings.save_txt)
 
-        self.d_loaded['min_threshold'] = float(self.min_threshold)
-        self.d_loaded['precision'] = float(self.precision)
-        self.d_loaded['check_direction'] = self.check_direction
-        self.d_loaded['embedded_folders'] = self.embedded_folders
-        self.d_loaded['save_txt'] = self.save_txt
-        self.d_loaded['text_save_to'] = self.save_to
+        self.d_loaded['min_threshold'] = float(self.settings.min_threshold)
+        self.d_loaded['precision'] = float(self.settings.precision)
+        self.d_loaded['check_direction'] = self.settings.check_direction
+        self.d_loaded['embedded_folders'] = self.settings.embedded_folders
+        self.d_loaded['save_txt'] = self.settings.save_txt
+        self.d_loaded['save_to'] = self.settings.save_to
 
 
 if __name__ == '__main__':

@@ -39,6 +39,7 @@ class SettingsData:
     def __new__(cls, *args, **kwargs):
         if not cls._instance:
             cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(self):
         self.min_threshold = SettingsDescriptor(None)
@@ -48,26 +49,32 @@ class SettingsData:
         self.save_txt = SettingsDescriptor(None)
         self.save_to = SettingsDescriptor(None)
 
+
+class SettingsUtils:
+    def __init__(self):
+        self.settings = SettingsData()  # не нужно, просто чтобы интерпретатор не ругался, работает потому,
+        # что везде названо self.settings
+
     def check_settings_on_load(self):
         # Проверка загружаемых настроек из ini файла
-        if not (0 <= float(self.min_threshold) <= 0.999999):
-            self.min_threshold = self.default_min_threshold
+        if not (0 <= float(self.settings.min_threshold) <= 0.999999):
+            self.settings.min_threshold = self.settings.default_min_threshold
 
-        if not (0.0000001 <= float(self.precision) <= 0.1):
-            self.precision = self.default_precision
+        if not (0.0000001 <= float(self.settings.precision) <= 0.1):
+            self.settings.precision = self.settings.default_precision
 
-        if not (0 == self.check_direction or 1 == self.check_direction):
-            self.check_direction = self.default_check_direction
+        if self.settings.check_direction not in (0, 1):
+            self.settings.check_direction = self.settings.default_check_direction
 
-        if not isinstance(self.embedded_folders, bool):
-            self.embedded_folders = self.default_embedded_folders
+        if not isinstance(self.settings.embedded_folders, bool):
+            self.settings.embedded_folders = self.settings.default_embedded_folders
 
-        if not isinstance(self.save_txt, bool):
-            self.save_txt = self.default_save_txt
+        if not isinstance(self.settings.save_txt, bool):
+            self.settings.save_txt = self.settings.default_save_txt
 
         forbidden_symbols = '*?\"<>|'
-        if not os.path.isabs(self.save_to) or any(char in forbidden_symbols for char in self.save_to):
-            self.save_to = self.default_save_to
+        if not os.path.isabs(self.settings.save_to) or any(char in forbidden_symbols for char in self.settings.save_to):
+            self.settings.save_to = self.settings.default_save_to
 
     def load_settings(self):
         config = configparser.ConfigParser()
@@ -77,21 +84,48 @@ class SettingsData:
             config.read('./check_images.ini')
 
             # Получаем значения параметров из файла .ini
-            self.min_threshold = config.getfloat('Settings', 'MinThreshold')
-            self.precision = config.getfloat('Settings', 'Precision')
-            self.check_direction = config.getint('Settings', 'CheckDirection')
-            self.embedded_folders = config.getboolean('Settings', 'EmbeddedFolders')
-            self.save_txt = config.getboolean('Settings', 'SaveTxt')
-            self.save_to = config.get('Settings', 'SaveTo')
+            self.settings.min_threshold = config.getfloat('Settings', 'MinThreshold')
+            self.settings.precision = config.getfloat('Settings', 'Precision')
+            self.settings.check_direction = config.getint('Settings', 'CheckDirection')
+            self.settings.embedded_folders = config.getboolean('Settings', 'EmbeddedFolders')
+            self.settings.save_txt = config.getboolean('Settings', 'SaveTxt')
+            self.settings.save_to = config.get('Settings', 'SaveTo')
 
             self.check_settings_on_load()
 
-        except (configparser.Error, FileNotFoundError):
+        except (configparser.Error, ValueError, FileNotFoundError):
             # Если возникает ошибка, используем значения по умолчанию
-            self.min_threshold = self.default_min_threshold
-            self.precision = self.default_precision
-            self.check_direction = self.default_check_direction
-            self.embedded_folders = self.default_embedded_folders
-            self.save_txt = self.default_save_txt
-            self.save_to = self.default_save_to
+            self.settings.min_threshold = self.settings.default_min_threshold
+            self.settings.precision = self.settings.default_precision
+            self.settings.check_direction = self.settings.default_check_direction
+            self.settings.embedded_folders = self.settings.default_embedded_folders
+            self.settings.save_txt = self.settings.default_save_txt
+            self.settings.save_to = self.settings.default_save_to
 
+        print(f'load settings: {self.settings.check_direction=}, {id(self.settings.check_direction)=}')
+
+    def save_settings(self, value1, value2, value3, value4, value5, value6):
+        config = configparser.ConfigParser()
+
+        self.settings.min_threshold = value1
+        self.settings.text_precision = value2
+        self.settings.check_direction = value3
+        self.settings.embedded_folders = value4
+        self.settings.save_txt = value5
+        self.settings.save_to = value6
+
+        print(f'save settings: {self.settings.check_direction=}, {id(self.settings.check_direction)=}')
+
+        # Устанавливаем значения параметров
+        config['Settings'] = {
+            'MinThreshold': self.settings.min_threshold,
+            'Precision': self.settings.precision,
+            'CheckDirection': str(self.settings.check_direction),
+            'EmbeddedFolders': str(self.settings.embedded_folders),
+            'SaveTxt': str(self.settings.save_txt),
+            'SaveTo': self.settings.save_to,
+        }
+
+        # Сохраняем конфигурацию в файл
+        with open('./check_images.ini', 'w') as configfile:
+            config.write(configfile)

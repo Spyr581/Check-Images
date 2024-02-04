@@ -13,7 +13,7 @@ class InitServiceOutputInfo:
     to the console and to the file.
     """
 
-    def __init__(self, tmpl_paths: list, precision: float):
+    def __init__(self, tmpl_paths: list, precision: float, direction: (0 | 1)):
         """
         :param tmpls_dict:    dict, contains pairs - {path to template images: list of images, ...}
         :param path_to_tmpls: tuple, 2 items: 0 - str, path to one image file or folder with image files, folder
@@ -22,6 +22,7 @@ class InitServiceOutputInfo:
         """
         self.__tmpl_paths = tmpl_paths
         self.__prec = precision
+        self.__direction = direction
 
         self.__img_indent = 0
         self.__count_indent = 0
@@ -44,7 +45,7 @@ class InitServiceOutputInfo:
         return left_indent, right_indent
 
     def print_header(self, scr_image: str) -> (str, str, str, str):
-        screenshot = f'|   SCREENSHOT - {scr_image}   |'
+        screenshot = f'|   {"SCREENSHOT" if 0 == self.__direction else "TEMPLATE"} - {scr_image}   |'
         precision = f'|   PRECISION - {self.__prec}   ///   '
         time = datetime.datetime.now()
         time_as_str = time.strftime('%Y-%m-%d %H:%M:%S') + '   |'
@@ -54,7 +55,8 @@ class InitServiceOutputInfo:
 
         # 1st string
         left, right = self.__calculate_header_indents(max_length, len(screenshot))
-        screenshot = f'|   {" " * left}SCREENSHOT - {scr_image}{" " * right}   |'
+        screenshot = f'|   {" " * left}{"SCREENSHOT" if 0 == self.__direction else "TEMPLATE"} - ' \
+                     f'{scr_image}{" " * right}   |'
 
         # 2nd string
         left, right = self.__calculate_header_indents(max_length, len(second_string))
@@ -160,36 +162,29 @@ class OutputInfo:
 
 
 class CheckImages:
-    """
-    The class searches for one template image or all template images from the folder and its subfolders `path_to_tmpls`
-    in all screenshots `screen_img`. With the given `precision`, it gives the maximum possible threshold with which each
-    template can be found on the screen image. The class looks for the number of occurrences of each template
-    in the image. It also additionally outputs the coordinates of the top left point
-    of each template on the screen image where the template was found. The threshold is found in the range
-    `min_threshold` ... 1.0. Prints information to the console and to a file.
-    """
+    def __init__(self,
+                 tmpl_paths: list,
+                 screen_imgs: list,
+                 console,
+                 min_threshold,
+                 precision,
+                 direction):
 
-    __extension_list = ['png', 'jpg', 'webp']
-    __tmpls_dict = dict()   # {'D:\\Python\\Check Images\\tf': ['e.png', 't.png'], ...}
-    __l_scr_img_gray = list()
+        self.__direction: (0 | 1) = direction
+        print(f'{self.__direction=}')
+        if 0 == self.__direction:
+            self.__tmpl_paths: [str] = tmpl_paths
+            self.__screen_imgs: [str] = screen_imgs
+        else:
+            self.__tmpl_paths: [str] = screen_imgs
+            self.__screen_imgs: [str] = tmpl_paths
 
-    def __init__(self, tmpl_paths: list, screen_imgs: list, console, min_threshold=0.6, precision=0.0001):
-        """
-        :param path_to_tmpls:      str, path to one image file or folder with image files, folder can be insist
-                                   subfolders with images templates
-        :param screen_img:         str, one or several paths to screenshot(-s), on which templates should be found,
-                                   delimiter is ' * '
-        :param min_threshold:      float
-        :param precision:          float
-        """
-        self.__tmpl_paths = tmpl_paths           # tuple, 2 items: 0 - str, path to one image
-                                                                       # file or folder with image files, folder
-                                                                       # 1 - str, filename if the input is one file,
-                                                                       # else - empty string
-        self.__screen_imgs = screen_imgs
-        self.__console_window = console
-        self.__min_threshold = min_threshold
-        self.__precision = precision
+        print(f'{self.__tmpl_paths=}')
+        print(f'{self.__screen_imgs=}')
+        self.__console_window = console   # wx.TextCtrl object
+        self.__min_threshold: float = min_threshold
+        self.__precision: float = precision
+
         self.__output_preparing = None
         self.__height = None
         self.__width = None
@@ -303,7 +298,9 @@ class CheckImages:
                 self.__console_window.AppendText('\n\n')
 
     def run(self):
-        self.__output_preparing = InitServiceOutputInfo(self.__tmpl_paths, self.__precision)
+        self.__output_preparing = InitServiceOutputInfo(self.__tmpl_paths,
+                                                        self.__precision,
+                                                        self.__direction)
         self.__find_thresholds_for_all_images()
 
 
