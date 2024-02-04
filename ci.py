@@ -168,7 +168,9 @@ class CheckImages:
                  console,
                  min_threshold,
                  precision,
-                 direction):
+                 direction,
+                 save_txt,
+                 save_to,):
 
         self.__direction: (0 | 1) = direction
         print(f'{self.__direction=}')
@@ -179,11 +181,11 @@ class CheckImages:
             self.__tmpl_paths: [str] = screen_imgs
             self.__screen_imgs: [str] = tmpl_paths
 
-        print(f'{self.__tmpl_paths=}')
-        print(f'{self.__screen_imgs=}')
         self.__console_window = console   # wx.TextCtrl object
         self.__min_threshold: float = min_threshold
         self.__precision: float = precision
+        self.__save_txt: bool = save_txt
+        self.__save_to: str = save_to
 
         self.__output_preparing = None
         self.__height = None
@@ -235,67 +237,74 @@ class CheckImages:
         return list(set(all_points_list))
 
     def __find_thresholds_for_all_images(self):
-        with open('thresholds.txt', 'at', encoding='utf-8') as f:
-            for scr_path in self.__screen_imgs:
-                scr_img_gray = self.__any_img_to_grayscale(scr_path)
-                header_info = self.__output_preparing.print_header(scr_path)
-                f.writelines(header_info[0])    # ------------------------------------------------------
-                f.writelines(header_info[1])    # |   SCREENSHOT - D:\Python\Check Images\i1_2.png     |
-                f.writelines(header_info[2])    # |   PRECISION - 0.0001   ///   2023-01-05 16:23:44   |
-                f.writelines(header_info[0])    # ------------------------------------------------------
-                f.writelines(header_info[3])    # IMAGE           |COUNT   |THRESHOLD   |X       |Y
-                f.writelines(header_info[0])    # ------------------------------------------------------
-                self.__console_window.AppendText(header_info[0])
-                self.__console_window.AppendText(header_info[1])
-                self.__console_window.AppendText(header_info[2])
-                self.__console_window.AppendText(header_info[0])
-                self.__console_window.AppendText(header_info[3])
-                self.__console_window.AppendText(header_info[0])
+        all_info = []
+        for scr_path in self.__screen_imgs:
+            scr_img_gray = self.__any_img_to_grayscale(scr_path)
+            header_info = self.__output_preparing.print_header(scr_path)
+            all_info.append(header_info[0])    # ------------------------------------------------------
+            all_info.append(header_info[1])    # |   SCREENSHOT - D:\Python\Check Images\i1_2.png     |
+            all_info.append(header_info[2])    # |   PRECISION - 0.0001   ///   2023-01-05 16:23:44   |
+            all_info.append(header_info[0])    # ------------------------------------------------------
+            all_info.append(header_info[3])    # IMAGE           |COUNT   |THRESHOLD   |X       |Y
+            all_info.append(header_info[0])    # ------------------------------------------------------
 
-                d_found_tmpl = dict()   # ex.: {(994, 1): 0.66438675, (994, 2): 0.99708754, (994, 3): 0.6657746}
-                for tmpl_path in self.__tmpl_paths:
-                    searching = self.__find_one_image(tmpl_path, scr_img_gray)
-                    location = numpy.where(searching >= self.__min_threshold)
+            self.__console_window.AppendText(header_info[0])
+            self.__console_window.AppendText(header_info[1])
+            self.__console_window.AppendText(header_info[2])
+            self.__console_window.AppendText(header_info[0])
+            self.__console_window.AppendText(header_info[3])
+            self.__console_window.AppendText(header_info[0])
 
-                    for coords in zip(*location[::-1]):
-                        if d_found_tmpl.get(coords) is None:
-                            d_found_tmpl[coords] = searching[coords[1], coords[0]]
-                    all_points_list = self.__filter_near_points(d_found_tmpl)   # [((849, 69), 0.8667161), ...]
-                    num_tmpls_found = len(all_points_list)
+            d_found_tmpl = dict()   # ex.: {(994, 1): 0.66438675, (994, 2): 0.99708754, (994, 3): 0.6657746}
+            for tmpl_path in self.__tmpl_paths:
+                searching = self.__find_one_image(tmpl_path, scr_img_gray)
+                location = numpy.where(searching >= self.__min_threshold)
 
-                    if num_tmpls_found > 0:
-                        for idx, coords_thr in enumerate(sorted(all_points_list, key=lambda a: a[1], reverse=True)):
-                            x, y = int(coords_thr[0][0]), int(coords_thr[0][1])
-                            threshold = float(self.__round_threshold(coords_thr[1]))
-                            one_entry_to_output = OutputInfo(os.path.basename(tmpl_path) if 0 == idx else '',
-                                                             threshold,
-                                                             self.__precision,
-                                                             self.__output_preparing.img_indent,
-                                                             self.__output_preparing.count_indent,
-                                                             self.__output_preparing.threshold_indent,
-                                                             self.__output_preparing.coord_indent,
-                                                             num_tmpls_found if 0 == idx else '',
-                                                             x,
-                                                             y)
-                            one_entry = one_entry_to_output.print_one_found_entry()
-                            f.writelines(one_entry)  # exit.webp    |  1     |0.8136      |994     |2
-                            self.__console_window.AppendText(one_entry)
-                    else:
-                        one_entry_to_output = OutputInfo(os.path.basename(tmpl_path),
-                                                         None,
+                for coords in zip(*location[::-1]):
+                    if d_found_tmpl.get(coords) is None:
+                        d_found_tmpl[coords] = searching[coords[1], coords[0]]
+                all_points_list = self.__filter_near_points(d_found_tmpl)   # [((849, 69), 0.8667161), ...]
+                num_tmpls_found = len(all_points_list)
+
+                one_entry = ''
+                if num_tmpls_found > 0:
+                    for idx, coords_thr in enumerate(sorted(all_points_list, key=lambda a: a[1], reverse=True)):
+                        x, y = int(coords_thr[0][0]), int(coords_thr[0][1])
+                        threshold = float(self.__round_threshold(coords_thr[1]))
+                        one_entry_to_output = OutputInfo(os.path.basename(tmpl_path) if 0 == idx else '',
+                                                         threshold,
                                                          self.__precision,
                                                          self.__output_preparing.img_indent,
                                                          self.__output_preparing.count_indent,
                                                          self.__output_preparing.threshold_indent,
                                                          self.__output_preparing.coord_indent,
-                                                         count=0,
-                                                         x=None,
-                                                         y=None)
-                        one_entry = one_entry_to_output.print_one_not_found_entry()
-                        f.writelines(one_entry)  # fg_win.webp    |  0     |Not found   |None    |None
+                                                         num_tmpls_found if 0 == idx else '',
+                                                         x,
+                                                         y)
+                        # exit.webp    |  1     |0.8136      |994     |2
+                        one_entry = one_entry_to_output.print_one_found_entry()
                         self.__console_window.AppendText(one_entry)
-                f.writelines('\n\n')
-                self.__console_window.AppendText('\n\n')
+                else:
+                    one_entry_to_output = OutputInfo(os.path.basename(tmpl_path),
+                                                     None,
+                                                     self.__precision,
+                                                     self.__output_preparing.img_indent,
+                                                     self.__output_preparing.count_indent,
+                                                     self.__output_preparing.threshold_indent,
+                                                     self.__output_preparing.coord_indent,
+                                                     count=0,
+                                                     x=None,
+                                                     y=None)
+                    # fg_win.webp    |  0     |Not found   |None    |None
+                    one_entry = one_entry_to_output.print_one_not_found_entry()
+                    self.__console_window.AppendText(one_entry)
+                all_info.append(one_entry)
+            all_info.append('\n\n')
+            self.__console_window.AppendText('\n\n')
+
+        if self.__save_txt:
+            with open(self.__save_to, 'at', encoding='utf-8') as f:
+                f.write(''.join(all_info))
 
     def run(self):
         self.__output_preparing = InitServiceOutputInfo(self.__tmpl_paths,

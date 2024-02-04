@@ -3,7 +3,6 @@
 
 import wx
 import os
-import configparser
 from ci import CheckImages
 from settings import SettingsData, SettingsUtils
 
@@ -40,10 +39,11 @@ class GUIUtils:
 class DropTarget(wx.FileDropTarget, GUIUtils):
     extensions = ['.jpg', '.png', '.webp']
 
-    def __init__(self, element, l_filepaths):
+    def __init__(self, element, l_filepaths, emb_folders):
         super().__init__()
         self.element = element
         self.l_filepaths = l_filepaths
+        self.emb_folders = emb_folders
 
     @classmethod
     def check_file_extension(cls, f):
@@ -53,18 +53,32 @@ class DropTarget(wx.FileDropTarget, GUIUtils):
         for filename in filenames:
             if os.path.isdir(filename):
                 # Если это папка, добавляем имена файлов в папке в ListBox
-                files_in_folder = [f for f in os.listdir(filename) if os.path.isfile(os.path.join(filename, f))]
+                if self.emb_folders:
+                    for root, dirs, files in os.walk(filename):
+                        for file in files:
+                            if not self.check_file_extension(file):
+                                continue
+                            full_filename = os.path.join(root, file)
+                            if self.check_file_presence(full_filename, self.l_filepaths):
+                                continue
+                            max_length = self.get_max_text_length(self.element, full_filename)
+                            short_path = self.format_file_name(full_filename, max_length)
+                            self.element.Append(short_path)
+                            self.l_filepaths.append((full_filename, short_path))
 
-                for file_in_folder in files_in_folder:
-                    if not self.check_file_extension(file_in_folder):
-                        continue
-                    if self.check_file_presence(file_in_folder, self.l_filepaths):
-                        continue
-                    full_filename = os.path.join(filename, file_in_folder)
-                    max_length = self.get_max_text_length(self.element, full_filename)
-                    short_path = self.format_file_name(full_filename, max_length)
-                    self.element.Append(short_path)
-                    self.l_filepaths.append((full_filename, short_path))
+                else:
+                    files_in_folder = [f for f in os.listdir(filename) if os.path.isfile(os.path.join(filename, f))]
+
+                    for file_in_folder in files_in_folder:
+                        if not self.check_file_extension(file_in_folder):
+                            continue
+                        if self.check_file_presence(file_in_folder, self.l_filepaths):
+                            continue
+                        full_filename = os.path.join(filename, file_in_folder)
+                        max_length = self.get_max_text_length(self.element, full_filename)
+                        short_path = self.format_file_name(full_filename, max_length)
+                        self.element.Append(short_path)
+                        self.l_filepaths.append((full_filename, short_path))
             else:
                 if not self.check_file_extension(filename):
                     continue
@@ -77,7 +91,7 @@ class DropTarget(wx.FileDropTarget, GUIUtils):
         return True
 
 
-class CIMainWindow(wx.Frame, GUIUtils, SettingsUtils):
+class CIMainWindow(wx.Frame, GUIUtils):
     def __init__(self, parent, title):
         super().__init__(parent, title=title, size=(1280, 800))
 
@@ -88,7 +102,8 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsUtils):
         self.last_selected_index_right = wx.NOT_FOUND
 
         self.settings = SettingsData()
-        self.load_settings()
+        self.s_utils = SettingsUtils()
+        self.s_utils.load_settings()
 
         # Создаем горизонтальный разделитель и две панели, которые он будет разделять
         splitter = wx.SplitterWindow(self, wx.ID_ANY, style=wx.SP_3D)
@@ -118,7 +133,9 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsUtils):
 
         self.listbox_left = wx.ListBox(panel_top, choices=[], style=wx.LB_SINGLE, id=1)
         # Устанавливаем DropTarget
-        self.listbox_left.SetDropTarget(DropTarget(self.listbox_left, self.l_left_selection))
+        self.listbox_left.SetDropTarget(DropTarget(self.listbox_left,
+                                                   self.l_left_selection,
+                                                   self.settings.embedded_folders))
         hbox_left.Add(self.listbox_left, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         # Кнопки +, -, Очистить для левого поля
@@ -149,7 +166,9 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsUtils):
 
         self.listbox_right = wx.ListBox(panel_top, choices=[], style=wx.LB_SINGLE, id=2)
         # Устанавливаем DropTarget
-        self.listbox_right.SetDropTarget(DropTarget(self.listbox_right, self.l_right_selection))
+        self.listbox_right.SetDropTarget(DropTarget(self.listbox_right,
+                                                    self.l_right_selection,
+                                                    self.settings.embedded_folders))
         hbox_right.Add(self.listbox_right, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         # Кнопки +, -, Очистить для правого поля
@@ -233,7 +252,8 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsUtils):
     def on_plus(self, event):
         button_id = event.GetEventObject().GetId()
         wildcard = "All Supported Images|*.jpg;*.png;*.webp"
-        dialog = wx.FileDialog(self, "Выберите файлы", wildcard=wildcard, style=wx.FD_OPEN | wx.FD_MULTIPLE)
+        style = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE
+        dialog = wx.FileDialog(self, "Выберите файлы", wildcard=wildcard, style=style)
         if dialog.ShowModal() == wx.ID_OK:
             selected_files = dialog.GetPaths()
             for file_path in selected_files:
@@ -280,13 +300,14 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsUtils):
 
         scr_paths = [double_path[0] for double_path in self.l_left_selection]
         tmpl_paths = [double_path[0] for double_path in self.l_right_selection]
-        print(f'on search: {self.settings.check_direction=}, {id(self.settings.check_direction)=}')
         check = CheckImages(tmpl_paths,
                             scr_paths,
                             self.console_text,
                             self.settings.min_threshold,
                             self.settings.precision,
-                            self.settings.check_direction)
+                            self.settings.direction,
+                            self.settings.save_txt,
+                            self.settings.save_to)
         check.run()
 
     def on_clear_bottom(self, event):
@@ -340,11 +361,12 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsUtils):
         dlg.Destroy()
 
 
-class SettingsDialog(wx.Dialog, SettingsUtils):
+class SettingsDialog(wx.Dialog):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
 
         self.settings = SettingsData()
+        self.s_utils = SettingsUtils()
         self.d_loaded = dict()
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
@@ -363,12 +385,12 @@ class SettingsDialog(wx.Dialog, SettingsUtils):
         gbs.Add(self.text_precision, pos=(1, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Выпадающий список
-        dropdown_check_direction = wx.StaticText(panel, label="Направление поиска")
+        dropdown_direction = wx.StaticText(panel, label="Направление поиска")
         choices = ["Картинки по скриншотам", "Скриншоты по картинкам"]
-        self.dropdown_check_direction = wx.Choice(panel, choices=choices)
+        self.dropdown_direction = wx.Choice(panel, choices=choices)
         # self.dropdown.SetSelection(0)
-        gbs.Add(dropdown_check_direction, pos=(2, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(self.dropdown_check_direction, pos=(2, 2), span=(1, 3),
+        gbs.Add(dropdown_direction, pos=(2, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(self.dropdown_direction, pos=(2, 2), span=(1, 3),
                 flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Галочка "Учитывать вложенные папки"
@@ -467,7 +489,7 @@ class SettingsDialog(wx.Dialog, SettingsUtils):
         # Сравнение текущих значений с загруженными
         min_threshold = float(self.text_threshold.GetValue())
         precision = float(self.text_precision.GetValue())
-        check_direction = self.dropdown_check_direction.GetSelection()
+        direction = self.dropdown_direction.GetSelection()
         embedded_folders = self.checkbox_embedded_folders.GetValue()
         save_txt = self.checkbox_save_txt.GetValue()
         save_to = self.text_save_to.GetValue()
@@ -475,15 +497,14 @@ class SettingsDialog(wx.Dialog, SettingsUtils):
         if (
                 min_threshold != self.d_loaded['min_threshold'] or
                 precision != self.d_loaded['precision'] or
-                check_direction != self.d_loaded['check_direction'] or
+                direction != self.d_loaded['direction'] or
                 embedded_folders != self.d_loaded['embedded_folders'] or
                 save_txt != self.d_loaded['save_txt'] or
                 save_to != self.d_loaded['save_to']
         ):
             # Если значения отличаются, сохраняем изменения в файл конфигурации
-            self.save_settings(min_threshold, precision, check_direction, embedded_folders, save_txt, save_to)
+            self.s_utils.save_settings(min_threshold, precision, direction, embedded_folders, save_txt, save_to)
 
-        print(f'on ok: {self.settings.check_direction=}, {id(self.settings.check_direction)=}')
         self.EndModal(wx.ID_OK)
 
     def on_cancel(self, event):
@@ -501,12 +522,12 @@ class SettingsDialog(wx.Dialog, SettingsUtils):
         self.btn_browse.Enable(is_checked)
 
     def set_window_settings(self):
-        self.load_settings()
+        self.s_utils.load_settings()
 
         # Устанавливаем значения в соответствующие элементы окна
         self.text_threshold.SetValue(str(self.settings.min_threshold))
         self.text_precision.SetValue(str(self.settings.precision))
-        self.dropdown_check_direction.SetSelection(self.settings.check_direction)
+        self.dropdown_direction.SetSelection(self.settings.direction)
         self.checkbox_embedded_folders.SetValue(self.settings.embedded_folders)
         self.checkbox_save_txt.SetValue(self.settings.save_txt)
         self.text_save_to.SetValue(self.settings.save_to)
@@ -517,7 +538,7 @@ class SettingsDialog(wx.Dialog, SettingsUtils):
 
         self.d_loaded['min_threshold'] = float(self.settings.min_threshold)
         self.d_loaded['precision'] = float(self.settings.precision)
-        self.d_loaded['check_direction'] = self.settings.check_direction
+        self.d_loaded['direction'] = self.settings.direction
         self.d_loaded['embedded_folders'] = self.settings.embedded_folders
         self.d_loaded['save_txt'] = self.settings.save_txt
         self.d_loaded['save_to'] = self.settings.save_to
