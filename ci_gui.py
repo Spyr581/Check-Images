@@ -322,7 +322,7 @@ class CIMainWindow(wx.Frame, GUIUtils, SettingsData):
         for idx, filepaths in enumerate(self.l_right_selection):   # filepaths - это кортеж, нужен 0 элемент
             max_length = self.get_max_text_length(self.listbox_right, filepaths[0])
             short_path = self.format_file_name(filepaths[0], max_length)
-            self.listbox_left.SetString(idx, short_path)
+            self.listbox_right.SetString(idx, short_path)
 
         event.Skip()
 
