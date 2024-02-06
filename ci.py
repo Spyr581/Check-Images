@@ -173,7 +173,6 @@ class CheckImages:
                  save_to,):
 
         self.__direction: (0 | 1) = direction
-        print(f'{self.__direction=}')
         if 0 == self.__direction:
             self.__tmpl_paths: [str] = tmpl_paths
             self.__screen_imgs: [str] = screen_imgs
@@ -255,8 +254,8 @@ class CheckImages:
             self.__console_window.AppendText(header_info[3])
             self.__console_window.AppendText(header_info[0])
 
-            d_found_tmpl = dict()   # ex.: {(994, 1): 0.66438675, (994, 2): 0.99708754, (994, 3): 0.6657746}
             for tmpl_path in self.__tmpl_paths:
+                d_found_tmpl = dict()  # ex.: {(994, 1): 0.66438675, (994, 2): 0.99708754, (994, 3): 0.6657746}
                 searching = self.__find_one_image(tmpl_path, scr_img_gray)
                 location = numpy.where(searching >= self.__min_threshold)
 
