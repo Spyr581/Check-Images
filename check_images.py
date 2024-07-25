@@ -21,7 +21,7 @@ class InitServiceOutputInfo:
                               1 - str, filename if the input is one file, else - empty string
         :param precision:     float
         """
-        self.__tmpls_dict = tmpls_dict
+        self.__d_tmpls = tmpls_dict
         self.__path_to_tmpls = path_to_tmpls
         self.__prec = precision
 
@@ -36,7 +36,7 @@ class InitServiceOutputInfo:
             img_name = self.__path_to_tmpls[1]
             length_list.append(len(img_name))
         else:
-            for tmpl_path, tmpl_names_list in self.__tmpls_dict.items():
+            for tmpl_path, tmpl_names_list in self.__d_tmpls.items():
                 subdir_name = tmpl_path.split(self.__path_to_tmpls[0])[1]
                 length_list += list(map(lambda x: len(subdir_name) + len(x), tmpl_names_list))
 
@@ -180,9 +180,9 @@ class CheckImages:
     `min_threshold` ... 1.0. Prints information to the console and to a file.
     """
 
-    __extension_list = ['png', 'jpg', 'webp']
-    __tmpls_dict = dict()   # {'D:\\Python\\Check Images\\tf': ['e.png', 't.png'], ...}
-    __scr_img_gray_list = list()
+    __l_extensions = ['png', 'jpg', 'webp']
+    __d_tmpls = dict()   # {'D:\\Python\\Check Images\\tf': ['e.png', 't.png'], ...}
+    __l_scr_img_gray = list()
 
     def __init__(self, path_to_tmpls: str, screen_img: str, min_threshold=0.6, precision=0.0001):
         """
@@ -211,11 +211,11 @@ class CheckImages:
 
         elif os.path.isfile(path):
             file_extension = path.split('.')[-1].lower()
-            if file_extension in self.__extension_list:
+            if file_extension in self.__l_extensions:
                 p = os.path.split(path)
                 return p[0], p[1]
             else:
-                error = f'File {path} not in proper format ({self.__extension_list})'
+                error = f'File {path} not in proper format ({self.__l_extensions})'
                 raise IOError(error)
 
         else:
@@ -227,8 +227,8 @@ class CheckImages:
         checked_img_list = []
         for img in img_list:
             if os.path.isfile(img):
-                extension = img.split('.')[-1].lower()
-                if extension in self.__extension_list:
+                extension = os.path.splitext(img)[1].lower()
+                if extension in self.__l_extensions:
                     checked_img_list.append(img)
 
         if not checked_img_list:
@@ -267,12 +267,12 @@ class CheckImages:
             for root, dirs, images in os.walk(self.__path_to_tmpls[0]):
                 prepared_images = []
                 for img in images:
-                    if img.split('.')[-1] in self.__class__.__extension_list:
+                    if os.path.splitext(img)[1].lower() in self.__class__.__l_extensions:
                         prepared_images.append(img)
-                self.__class__.__tmpls_dict[root] = prepared_images
+                self.__class__.__d_tmpls[root] = prepared_images
 
         else:
-            self.__class__.__tmpls_dict[self.__path_to_tmpls[0]] = [self.__path_to_tmpls[1]]
+            self.__class__.__d_tmpls[self.__path_to_tmpls[0]] = [self.__path_to_tmpls[1]]
 
     def __any_img_to_grayscale(self, path: str) -> numpy.ndarray:
         img_rgb = cv2.imread(path)
@@ -281,7 +281,7 @@ class CheckImages:
     def __find_one_image(self, img: str) -> numpy.ndarray:
         img = self.__any_img_to_grayscale(img)
         self.__height, self.__width = img.shape
-        return cv2.matchTemplate(img, self.__class__.__scr_img_gray_list[self.__screen_index], cv2.TM_CCOEFF_NORMED)
+        return cv2.matchTemplate(img, self.__class__.__l_scr_img_gray[self.__screen_index], cv2.TM_CCOEFF_NORMED)
 
     def __filter_near_points(self, found_tmpl_dict: dict) -> list:
         prev_pt = None
@@ -324,7 +324,7 @@ class CheckImages:
             f.writelines(header_info[4])    # IMAGE           |COUNT   |THRESHOLD   |X       |Y
             f.writelines(header_info[0])    # ------------------------------------------------------
 
-            for tmpl_path, tmpl_names_list in self.__class__.__tmpls_dict.items():
+            for tmpl_path, tmpl_names_list in self.__class__.__d_tmpls.items():
                 for tmpl_name in tmpl_names_list:
                     found_tmpl_dict = dict()
 
@@ -369,11 +369,11 @@ class CheckImages:
 
     def run(self):
         for img in self.__screen_img_list:
-            self.__class__.__scr_img_gray_list.append(self.__any_img_to_grayscale(img))
+            self.__class__.__l_scr_img_gray.append(self.__any_img_to_grayscale(img))
         self.__find_all_template_files()
-        self.__output_preparing = InitServiceOutputInfo(self.__class__.__tmpls_dict, self.__path_to_tmpls,
+        self.__output_preparing = InitServiceOutputInfo(self.__class__.__d_tmpls, self.__path_to_tmpls,
                                                         self.__precision)
-        for _ in range(len(self.__scr_img_gray_list)):
+        for _ in range(len(self.__l_scr_img_gray)):
             self.__find_thresholds_for_all_images()
             self.__screen_index += 1
 

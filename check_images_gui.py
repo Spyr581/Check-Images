@@ -131,7 +131,7 @@ class CIMainWindow(wx.Frame, GUIUtils):
         # Создаем горизонтальный бокссайзер для поля выбора и кнопок слева
         hbox_left = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.listbox_left = wx.ListBox(panel_top, choices=[], style=wx.LB_SINGLE, id=1)
+        self.listbox_left = wx.ListBox(panel_top, choices=[], style=wx.LB_MULTIPLE, id=1)
         # Устанавливаем DropTarget
         self.listbox_left.SetDropTarget(DropTarget(self.listbox_left,
                                                    self.l_left_selection,
@@ -164,7 +164,7 @@ class CIMainWindow(wx.Frame, GUIUtils):
         # Создаем горизонтальный бокссайзер для поля выбора и кнопок справа
         hbox_right = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.listbox_right = wx.ListBox(panel_top, choices=[], style=wx.LB_SINGLE, id=2)
+        self.listbox_right = wx.ListBox(panel_top, choices=[], style=wx.LB_MULTIPLE, id=2)
         # Устанавливаем DropTarget
         self.listbox_right.SetDropTarget(DropTarget(self.listbox_right,
                                                     self.l_right_selection,
@@ -273,24 +273,35 @@ class CIMainWindow(wx.Frame, GUIUtils):
         button_id = event.GetEventObject().GetId()
         if button_id == 11:
             print(self.l_left_selection)
-            selected_item_left = self.listbox_left.GetSelection()
-            if selected_item_left != wx.NOT_FOUND:
-                self.listbox_left.Delete(selected_item_left)
-                print(selected_item_left)
-                del self.l_left_selection[selected_item_left]
+            selected_items_left = self.listbox_left.GetSelections()
+            print(selected_items_left)
+            if len(selected_items_left) != 0:
+                for idx in sorted(selected_items_left, reverse=True):
+                    self.listbox_left.Delete(idx)
+                    del self.l_left_selection[idx]
         elif button_id == 21:
             print(self.l_right_selection)
-            selected_item_right = self.listbox_right.GetSelection()
-            if selected_item_right != wx.NOT_FOUND:
-                self.listbox_right.Delete(selected_item_right)
-                del self.l_left_selection[selected_item_right]
+            selected_items_right = self.listbox_right.GetSelections()
+            print(selected_items_right)
+            if len(selected_items_right) != 0:
+                for idx in sorted(selected_items_right, reverse=True):
+                    self.listbox_right.Delete(idx)
+                    del self.l_right_selection[idx]
 
     def on_clear(self, event):
         button_id = event.GetEventObject().GetId()
         if button_id == 12:
+            selections = self.listbox_left.GetSelections()   # list
+            for idx in selections:
+                self.listbox_left.Deselect(idx)
+            self.last_selected_index_left = wx.NOT_FOUND
             self.listbox_left.Clear()
             self.l_left_selection.clear()
         elif button_id == 22:
+            selections = self.listbox_left.GetSelections()   # list
+            for idx in selections:
+                self.listbox_left.Deselect(idx)
+            self.last_selected_index_right = wx.NOT_FOUND
             self.listbox_right.Clear()
             self.l_right_selection.clear()
 
@@ -314,30 +325,30 @@ class CIMainWindow(wx.Frame, GUIUtils):
         self.console_text.SetValue("")
 
     def on_left_click(self, event):
-        # Получаем координаты мыши
-        x, y = event.GetPosition()
-        selected_id = event.GetId()
-
-        # Если индекс совпадает с последним выбранным, снимаем выделение
-        if selected_id == 1:
-            # Определяем индекс элемента, над которым находится мышь
-            index = self.listbox_left.HitTest((x, y))
-            if index == self.last_selected_index_left:
-                self.listbox_left.Deselect(index)
-                self.last_selected_index_left = wx.NOT_FOUND
-            else:
-                # Иначе, устанавливаем выделение на текущем элементе
-                self.listbox_left.SetSelection(index)
-                self.last_selected_index_left = index
-        elif selected_id == 2:
-            index = self.listbox_right.HitTest((x, y))
-            if index == self.last_selected_index_right:
-                self.listbox_right.Deselect(index)
-                self.last_selected_index_right = wx.NOT_FOUND
-            else:
-                # Иначе, устанавливаем выделение на текущем элементе
-                self.listbox_right.SetSelection(index)
-                self.last_selected_index_right = index
+        # # Получаем координаты мыши
+        # x, y = event.GetPosition()
+        # selected_id = event.GetId()
+        #
+        # # Если индекс совпадает с последним выбранным, снимаем выделение
+        # if selected_id == 1:
+        #     # Определяем индекс элемента, над которым находится мышь
+        #     index = self.listbox_left.HitTest((x, y))
+        #     if index == self.last_selected_index_left:
+        #         self.listbox_left.Deselect(index)
+        #         self.last_selected_index_left = wx.NOT_FOUND
+        #     else:
+        #         # Иначе, устанавливаем выделение на текущем элементе
+        #         self.listbox_left.SetSelection(index)
+        #         self.last_selected_index_left = index
+        # elif selected_id == 2:
+        #     index = self.listbox_right.HitTest((x, y))
+        #     if index == self.last_selected_index_right:
+        #         self.listbox_right.Deselect(index)
+        #         self.last_selected_index_right = wx.NOT_FOUND
+        #     else:
+        #         # Иначе, устанавливаем выделение на текущем элементе
+        #         self.listbox_right.SetSelection(index)
+        #         self.last_selected_index_right = index
 
         event.Skip()
 
