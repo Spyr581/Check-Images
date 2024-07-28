@@ -160,6 +160,10 @@ class OutputInfo:
 
         return one_entry + '\n'
 
+    def print_any_warning(self, warn) -> str:
+        print(warn)
+        return warn + '\n'
+
 
 class CheckImages:
     def __init__(self,
@@ -196,15 +200,29 @@ class CheckImages:
         thr = int(thr * multiplier)
         return thr / multiplier
 
-    def __any_img_to_grayscale(self, path: str) -> numpy.ndarray:
-        img_rgb = cv2.imread(path)
+    def __any_img_to_grayscale(self, path: str) -> numpy.ndarray | str:
+        try:
+            img_rgb = cv2.imread(path)
+            if not isinstance(img_rgb, numpy.ndarray):
+                raise RuntimeError("File can't be presented as numpy array")
+        except (cv2.error, RuntimeError, Exception) as e:
+            return f"Can't open file: {path}: {e}"
+
         return cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
 
-    def __find_one_image(self, img: str, scr_img: numpy.ndarray) -> numpy.ndarray:
-        img = self.__any_img_to_grayscale(img)
+    def __find_one_image(self, path: str, scr_img: numpy.ndarray) -> numpy.ndarray | str:
+        img = self.__any_img_to_grayscale(path)
         self.__height, self.__width = img.shape
+        scr_img_height, scr_img_width = scr_img.shape
+        if self.__height > scr_img_height or self.__width > scr_img_width:
+            return (f'Incorrect size of `what` ({path}) and `where` images (WxH): what - {self.__width}x'
+                    f'{self.__height}, where - {scr_img_width}x{scr_img_height}')
+        try:
+            result = cv2.matchTemplate(img, scr_img, cv2.TM_CCOEFF_NORMED)
+        except (cv2.error, Exception) as e:
+            result = f'Any problem to find image {img}: {e}'
 
-        return cv2.matchTemplate(img, scr_img, cv2.TM_CCOEFF_NORMED)
+        return result
 
     def __filter_near_points(self, d_found_tmpl: dict) -> [((int, int), float)]:   # [((x, y), threshold), ...]
         prev_coords = None
@@ -236,10 +254,13 @@ class CheckImages:
 
         return list(set(all_points_list))
 
+    def __create_empty_output_entry(self) -> OutputInfo:
+        return OutputInfo('', None, 0,0, 0, 0, 0,
+                          None, None, None)
+
     def __find_thresholds_for_all_images(self):
         all_info = []
         for scr_path in self.__screen_imgs:
-            scr_img_gray = self.__any_img_to_grayscale(scr_path)
             header_info = self.__output_preparing.print_header(scr_path)
             all_info.append(header_info[0])    # ------------------------------------------------------
             all_info.append(header_info[1])    # |   SCREENSHOT - D:\Python\Check Images\i1_2.png     |
@@ -255,49 +276,73 @@ class CheckImages:
             self.__console_window.AppendText(header_info[3])
             self.__console_window.AppendText(header_info[0])
 
+            if not os.path.exists(scr_path):
+                no_scr_file_warning = f'No screenshot file: {scr_path}\n\n\n'
+                all_info.append(no_scr_file_warning)
+                self.__console_window.AppendText(no_scr_file_warning)
+                continue
+
+            scr_img_gray = self.__any_img_to_grayscale(scr_path)
+            if isinstance(scr_img_gray, str):
+                open_file_error = f"Can't open file: {scr_path}\n\n\n"
+                all_info.append(open_file_error)
+                self.__console_window.AppendText(open_file_error)
+                continue
+
             for tmpl_path in self.__tmpl_paths:
-                d_found_tmpl = dict()  # ex.: {(994, 1): 0.66438675, (994, 2): 0.99708754, (994, 3): 0.6657746}
-                searching = self.__find_one_image(tmpl_path, scr_img_gray)
-                location = numpy.where(searching >= self.__min_threshold)
+                if not os.path.exists(tmpl_path):
+                    no_tmpl_file_warning = f'NO TEMPLATE FILE: {tmpl_path}'
+                    one_entry_to_output = self.__create_empty_output_entry()
+                    one_entry = one_entry_to_output.print_any_warning(no_tmpl_file_warning)
+                    self.__console_window.AppendText(one_entry)
+                else:
+                    d_found_tmpl = dict()  # ex.: {(994, 1): 0.66438675, (994, 2): 0.99708754, (994, 3): 0.6657746}
+                    searching = self.__find_one_image(tmpl_path, scr_img_gray)
+                    if isinstance(searching, str):
+                        one_entry_to_output = self.__create_empty_output_entry()
+                        one_entry = one_entry_to_output.print_any_warning(searching)
+                        self.__console_window.AppendText(one_entry)
+                        continue
 
-                for coords in zip(*location[::-1]):
-                    if d_found_tmpl.get(coords) is None:
-                        d_found_tmpl[coords] = searching[coords[1], coords[0]]
-                all_points_list = self.__filter_near_points(d_found_tmpl)   # [((849, 69), 0.8667161), ...]
-                num_tmpls_found = len(all_points_list)
+                    location = numpy.where(searching >= self.__min_threshold)
+                    for coords in zip(*location[::-1]):
+                        if d_found_tmpl.get(coords) is None:
+                            d_found_tmpl[coords] = searching[coords[1], coords[0]]
+                    all_points_list = self.__filter_near_points(d_found_tmpl)   # [((849, 69), 0.8667161), ...]
+                    num_tmpls_found = len(all_points_list)
 
-                one_entry = ''
-                if num_tmpls_found > 0:
-                    for idx, coords_thr in enumerate(sorted(all_points_list, key=lambda a: a[1], reverse=True)):
-                        x, y = int(coords_thr[0][0]), int(coords_thr[0][1])
-                        threshold = float(self.__round_threshold(coords_thr[1]))
-                        one_entry_to_output = OutputInfo(os.path.basename(tmpl_path) if 0 == idx else '',
-                                                         threshold,
+                    one_entry = ''
+                    if num_tmpls_found > 0:
+                        for idx, coords_thr in enumerate(sorted(all_points_list, key=lambda a: a[1], reverse=True)):
+                            x, y = int(coords_thr[0][0]), int(coords_thr[0][1])
+                            threshold = float(self.__round_threshold(coords_thr[1]))
+                            one_entry_to_output = OutputInfo(os.path.basename(tmpl_path) if 0 == idx else '',
+                                                             threshold,
+                                                             self.__precision,
+                                                             self.__output_preparing.img_indent,
+                                                             self.__output_preparing.count_indent,
+                                                             self.__output_preparing.threshold_indent,
+                                                             self.__output_preparing.coord_indent,
+                                                             num_tmpls_found if 0 == idx else '',
+                                                             x,
+                                                             y)
+                            # exit.webp    |  1     |0.8136      |994     |2
+                            one_entry = one_entry_to_output.print_one_found_entry()
+                            self.__console_window.AppendText(one_entry)
+                    else:
+                        one_entry_to_output = OutputInfo(os.path.basename(tmpl_path),
+                                                         None,
                                                          self.__precision,
                                                          self.__output_preparing.img_indent,
                                                          self.__output_preparing.count_indent,
                                                          self.__output_preparing.threshold_indent,
                                                          self.__output_preparing.coord_indent,
-                                                         num_tmpls_found if 0 == idx else '',
-                                                         x,
-                                                         y)
-                        # exit.webp    |  1     |0.8136      |994     |2
-                        one_entry = one_entry_to_output.print_one_found_entry()
+                                                         count=0,
+                                                         x=None,
+                                                         y=None)
+                        # fg_win.webp    |  0     |Not found   |None    |None
+                        one_entry = one_entry_to_output.print_one_not_found_entry()
                         self.__console_window.AppendText(one_entry)
-                else:
-                    one_entry_to_output = OutputInfo(os.path.basename(tmpl_path),
-                                                     None,
-                                                     self.__precision,
-                                                     self.__output_preparing.img_indent,
-                                                     self.__output_preparing.count_indent,
-                                                     self.__output_preparing.threshold_indent,
-                                                     self.__output_preparing.coord_indent,
-                                                     count=0,
-                                                     x=None,
-                                                     y=None)
-                    # fg_win.webp    |  0     |Not found   |None    |None
-                    one_entry = one_entry_to_output.print_one_not_found_entry()
-                    self.__console_window.AppendText(one_entry)
                 all_info.append(one_entry)
             all_info.append('\n\n')
             self.__console_window.AppendText('\n\n')

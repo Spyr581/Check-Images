@@ -1,5 +1,5 @@
 # Check images by OpenCV with GUI
-# Version 1.0
+# Version 1.1
 
 import wx
 import os
