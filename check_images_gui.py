@@ -93,7 +93,7 @@ class DropTarget(wx.FileDropTarget, GUIUtils):
                 short_path = self.format_file_name(filename, max_length)
                 self.element.Append(short_path)
                 self.l_filepaths.append((filename, short_path))
-        print(f'DROP: {self.l_filepaths=}')
+
         return True
 
 
@@ -101,15 +101,14 @@ class CIMainWindow(wx.Frame, GUIUtils):
     def __init__(self, parent, title):
         super().__init__(parent, title=title, size=(1280, 800))
 
-        self.l_left_selection = []
-        self.l_right_selection = []
-
-        self.last_selected_index_left = wx.NOT_FOUND
-        self.last_selected_index_right = wx.NOT_FOUND
+        self.added_files = {'left': [],
+                            'right': []}
+        self.listbox = {}
+        self.droptarget = {}
 
         self.settings = SettingsData()
-        self.s_utils = SettingsUtils()
-        self.s_utils.load_settings()
+        self.settings_utils = SettingsUtils()
+        self.settings_utils.load_settings()
 
         # Создаем горизонтальный разделитель и две панели, которые он будет разделять
         splitter = wx.SplitterWindow(self, wx.ID_ANY, style=wx.SP_3D)
@@ -137,11 +136,13 @@ class CIMainWindow(wx.Frame, GUIUtils):
         # Создаем горизонтальный бокссайзер для поля выбора и кнопок слева
         hbox_left = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.listbox_left = wx.ListBox(panel_top, choices=[], style=wx.LB_MULTIPLE, id=1)
+        self.listbox['left'] = wx.ListBox(panel_top, choices=[], style=wx.LB_MULTIPLE, id=1)
         # Устанавливаем DropTarget
-        self.droptarget_left = DropTarget(self.listbox_left, self.l_left_selection, self.settings.embedded_folders)
-        self.listbox_left.SetDropTarget(self.droptarget_left)
-        hbox_left.Add(self.listbox_left, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
+        self.droptarget['left'] = DropTarget(self.listbox['left'],
+                                          self.added_files['left'],
+                                          self.settings.embedded_folders)
+        self.listbox['left'].SetDropTarget(self.droptarget['left'])
+        hbox_left.Add(self.listbox['left'], 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         # Кнопки +, -, Очистить для левого поля
         vbox_buttons_left = wx.BoxSizer(wx.VERTICAL)
@@ -171,11 +172,11 @@ class CIMainWindow(wx.Frame, GUIUtils):
         # Создаем горизонтальный бокссайзер для поля выбора и кнопок справа
         hbox_right = wx.BoxSizer(wx.HORIZONTAL)
 
-        self.listbox_right = wx.ListBox(panel_top, choices=[], style=wx.LB_MULTIPLE, id=2)
+        self.listbox['right'] = wx.ListBox(panel_top, choices=[], style=wx.LB_MULTIPLE, id=2)
         # Устанавливаем DropTarget
-        self.droptarget_right = DropTarget(self.listbox_right, self.l_right_selection, self.settings.embedded_folders)
-        self.listbox_right.SetDropTarget(self.droptarget_right)
-        hbox_right.Add(self.listbox_right, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
+        self.droptarget['right'] = DropTarget(self.listbox['right'], self.added_files['right'], self.settings.embedded_folders)
+        self.listbox['right'].SetDropTarget(self.droptarget['right'])
+        hbox_right.Add(self.listbox['right'], 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         # Кнопки +, -, Очистить для правого поля
         vbox_buttons_right = wx.BoxSizer(wx.VERTICAL)
@@ -199,7 +200,7 @@ class CIMainWindow(wx.Frame, GUIUtils):
 
         # Кнопки "Искать", "Очистить", "Настройки"
         hbox_bottom_buttons = wx.BoxSizer(wx.HORIZONTAL)
-        btn_search = wx.Button(panel_top, label="Искать", size=(80, 30))
+        btn_search = wx.Button(panel_top, label="ИСКАТЬ", size=(80, 30))
         btn_clear_bottom = wx.Button(panel_top, label="Очистить", size=(80, 30))
         btn_clear_all = wx.Button(panel_top, label="Очистить все", size=(100, 30))
         btn_settings = wx.Button(panel_top, label="Настройки", size=(80, 30))
@@ -259,16 +260,46 @@ class CIMainWindow(wx.Frame, GUIUtils):
         self.Show(True)
 
     def __reinitialize_droptarget(self, left_or_right):
-        if 'left' == left_or_right:
-            self.droptarget_left.reinitialize(self.listbox_left,
-                                              self.l_left_selection,
-                                              self.settings.embedded_folders)
-        elif 'right' == left_or_right:
-            self.droptarget_right.reinitialize(self.listbox_right,
-                                              self.l_right_selection,
-                                              self.settings.embedded_folders)
-        else:
-            raise ValueError('Incoorect `left_or_right` value: must be left or right')
+        self.droptarget[left_or_right].reinitialize(self.listbox[left_or_right],
+                                                    self.added_files[left_or_right],
+                                                    self.settings.embedded_folders)
+
+    def __add_files(self, left_or_right, selected_files):
+        for file_path in selected_files:
+            max_length = self.get_max_text_length(self.listbox[left_or_right], file_path)
+            short_path = self.format_file_name(file_path, max_length)
+            self.listbox[left_or_right].Append(short_path)
+            self.added_files[left_or_right].append((file_path, short_path))
+            self.__reinitialize_droptarget(left_or_right)
+
+    def __remove_entries(self, left_or_right):
+        selected_items = self.listbox[left_or_right].GetSelections()
+        if len(selected_items) != 0:
+            for idx in sorted(selected_items, reverse=True):
+                self.listbox[left_or_right].Delete(idx)
+                del self.added_files[left_or_right][idx]
+        self.__reinitialize_droptarget(left_or_right)
+
+    def __refresh_listbox(self, left_or_right):
+        self.__flush_listbox_entries(left_or_right)
+        l_temp = []
+        for path, short_path in sorted(self.added_files[left_or_right], key=lambda x: x[0]):
+            if os.path.exists(path):
+                l_temp.append((path, short_path))
+                self.listbox[left_or_right].Append(short_path)
+        self.added_files[left_or_right] = l_temp
+        self.__reinitialize_droptarget(left_or_right)
+
+    def __clear_listbox(self, left_or_right):
+        self.__flush_listbox_entries(left_or_right)
+        self.added_files[left_or_right].clear()
+        self.__reinitialize_droptarget(left_or_right)
+
+    def __flush_listbox_entries(self, left_or_right):
+        selections = self.listbox[left_or_right].GetSelections()  # list
+        for idx in selections:
+            self.listbox[left_or_right].Deselect(idx)
+        self.listbox[left_or_right].Clear()
 
     def on_plus(self, event):
         button_id = event.GetEventObject().GetId()
@@ -277,86 +308,39 @@ class CIMainWindow(wx.Frame, GUIUtils):
         dialog = wx.FileDialog(self, "Выберите файлы", wildcard=wildcard, style=style)
         if dialog.ShowModal() == wx.ID_OK:
             selected_files = dialog.GetPaths()
-            for file_path in selected_files:
-                if button_id == 10:
-                    max_length = self.get_max_text_length(self.listbox_left, file_path)
-                    short_path = self.format_file_name(file_path, max_length)
-                    self.listbox_left.Append(short_path)
-                    self.l_left_selection.append((file_path, short_path))
-                    self.__reinitialize_droptarget('left')
-                elif button_id == 20:
-                    max_length = self.get_max_text_length(self.listbox_right, file_path)
-                    short_path = self.format_file_name(file_path, max_length)
-                    self.listbox_right.Append(short_path)
-                    self.l_right_selection.append((file_path, short_path))
-                    self.__reinitialize_droptarget('right')
+            if button_id == 10:
+                self.__add_files('left', selected_files)
+            elif button_id == 20:
+                self.__add_files('right', selected_files)
         dialog.Destroy()
 
     def on_minus(self, event):
         button_id = event.GetEventObject().GetId()
         if button_id == 11:
-            print(self.l_left_selection)
-            selected_items_left = self.listbox_left.GetSelections()
-            print(selected_items_left)
-            if len(selected_items_left) != 0:
-                for idx in sorted(selected_items_left, reverse=True):
-                    self.listbox_left.Delete(idx)
-                    del self.l_left_selection[idx]
-            self.__reinitialize_droptarget('left')
+            self.__remove_entries('left')
         elif button_id == 21:
-            print(self.l_right_selection)
-            selected_items_right = self.listbox_right.GetSelections()
-            print(selected_items_right)
-            if len(selected_items_right) != 0:
-                for idx in sorted(selected_items_right, reverse=True):
-                    self.listbox_right.Delete(idx)
-                    del self.l_right_selection[idx]
-            self.__reinitialize_droptarget('right')
+            self.__remove_entries('right')
 
     def on_refresh(self, event):
         button_id = event.GetEventObject().GetId()
-        l_temp = []
         if button_id == 12:
-            self.__clear_listbox(self.listbox_left)
-            for path, short_path in sorted(self.l_left_selection, key=lambda x: x[0]):
-                if os.path.exists(path):
-                    print(path, short_path)
-                    l_temp.append((path, short_path))
-                    self.listbox_left.Append(short_path)
-            self.l_left_selection = l_temp
-            self.__reinitialize_droptarget('left')
+            self.__refresh_listbox('left')
         elif button_id == 22:
-            self.__clear_listbox(self.listbox_right)
-            for path, short_path in sorted(self.l_right_selection, key=lambda x: x[0]):
-                if os.path.exists(path):
-                    l_temp.append((path, short_path))
-                    self.listbox_right.Append(short_path)
-            self.l_right_selection = l_temp
-            self.__reinitialize_droptarget('right')
-
-    def __clear_listbox(self, listbox):
-        selections = listbox.GetSelections()  # list
-        for idx in selections:
-            listbox.Deselect(idx)
-        listbox.Clear()
+            self.__refresh_listbox('right')
 
     def on_clear(self, event):
         button_id = event.GetEventObject().GetId()
         if button_id == 13:
-            self.__clear_listbox(self.listbox_left)
-            self.l_left_selection.clear()
-            self.__reinitialize_droptarget('left')
+            self.__clear_listbox('left')
         elif button_id == 23:
-            self.__clear_listbox(self.listbox_right)
-            self.l_right_selection.clear()
-            self.__reinitialize_droptarget('right')
+            self.__clear_listbox('right')
 
     def on_search(self, event):
-        if not self.l_left_selection or not self.l_right_selection:
+        if not self.added_files['left'] or not self.added_files['right']:
             return
 
-        scr_paths = [double_path[0] for double_path in self.l_left_selection]
-        tmpl_paths = [double_path[0] for double_path in self.l_right_selection]
+        scr_paths = [double_path[0] for double_path in self.added_files['left']]
+        tmpl_paths = [double_path[0] for double_path in self.added_files['right']]
         check = CheckImages(tmpl_paths,
                             scr_paths,
                             self.console_text,
@@ -371,25 +355,21 @@ class CIMainWindow(wx.Frame, GUIUtils):
         self.console_text.SetValue("")
 
     def on_size(self, event):
-        for idx, filepaths in enumerate(self.l_left_selection):   # filepaths - это кортеж, нужен 0 элемент
-            max_length = self.get_max_text_length(self.listbox_left, filepaths[0])
+        for idx, filepaths in enumerate(self.added_files['left']):   # filepaths - это кортеж, нужен 0 элемент
+            max_length = self.get_max_text_length(self.listbox['left'], filepaths[0])
             short_path = self.format_file_name(filepaths[0], max_length)
-            self.listbox_left.SetString(idx, short_path)
+            self.listbox['left'].SetString(idx, short_path)
 
-        for idx, filepaths in enumerate(self.l_right_selection):   # filepaths - это кортеж, нужен 0 элемент
-            max_length = self.get_max_text_length(self.listbox_right, filepaths[0])
+        for idx, filepaths in enumerate(self.added_files['right']):   # filepaths - это кортеж, нужен 0 элемент
+            max_length = self.get_max_text_length(self.listbox['right'], filepaths[0])
             short_path = self.format_file_name(filepaths[0], max_length)
-            self.listbox_right.SetString(idx, short_path)
+            self.listbox['right'].SetString(idx, short_path)
 
         event.Skip()
 
     def on_clear_all(self, event):
-        self.__clear_listbox(self.listbox_left)
-        self.l_left_selection.clear()
-        self.__reinitialize_droptarget('left')
-        self.__clear_listbox(self.listbox_right)
-        self.l_right_selection.clear()
-        self.__reinitialize_droptarget('right')
+        self.__clear_listbox('left')
+        self.__clear_listbox('right')
         self.console_text.SetValue("")
 
     def show_settings_dialog(self, event):
@@ -404,7 +384,7 @@ class SettingsDialog(wx.Dialog):
         super().__init__(*args, **kw)
 
         self.settings = SettingsData()
-        self.s_utils = SettingsUtils()
+        self.settings_utils = SettingsUtils()
         self.d_loaded = dict()
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
@@ -541,7 +521,7 @@ class SettingsDialog(wx.Dialog):
                 save_to != self.d_loaded['save_to']
         ):
             # Если значения отличаются, сохраняем изменения в файл конфигурации
-            self.s_utils.save_settings(min_threshold, precision, direction, embedded_folders, save_txt, save_to)
+            self.settings_utils.save_settings(min_threshold, precision, direction, embedded_folders, save_txt, save_to)
 
         self.EndModal(wx.ID_OK)
 
@@ -560,7 +540,7 @@ class SettingsDialog(wx.Dialog):
         self.btn_browse.Enable(is_checked)
 
     def set_window_settings(self):
-        self.s_utils.load_settings()
+        self.settings_utils.load_settings()
 
         # Устанавливаем значения в соответствующие элементы окна
         self.text_threshold.SetValue(str(self.settings.min_threshold))

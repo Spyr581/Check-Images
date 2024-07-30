@@ -181,7 +181,6 @@ class CheckImages:
                  save_to,):
 
         self.__direction: (0 | 1) = direction
-        print(f'{self.__direction=}')
         if 0 == self.__direction:
             self.__tmpl_paths: [str] = tmpl_paths
             self.__screen_imgs: [str] = screen_imgs
@@ -206,21 +205,26 @@ class CheckImages:
 
     def __any_img_to_grayscale(self, path: str) -> numpy.ndarray | str:
         try:
-            img_rgb = cv2.imread(path)
-            if not isinstance(img_rgb, numpy.ndarray):
-                raise RuntimeError("Файл не может быть представлен как numpy array")
-        except (cv2.error, RuntimeError, Exception) as e:
-            return f"Не получилось открыть файл: {path}: {e}"
+            with open(path, 'rb') as file:
+                file_bytes = numpy.asarray(bytearray(file.read()), dtype=numpy.uint8)
+        except Exception as e:
+            return f"Ошибка открытия файла {path}: {e}"
+
+        img_rgb = cv2.imdecode(file_bytes, cv2.IMREAD_COLOR)
+        if img_rgb is None:
+            return f"OpenCV не может преобразовать файл в изображение: {path}"
 
         return cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
 
     def __find_one_image(self, path: str, scr_img: numpy.ndarray) -> numpy.ndarray | str:
         img = self.__any_img_to_grayscale(path)
+        if isinstance(img, str):
+            return img
         self.__height, self.__width = img.shape
         scr_img_height, scr_img_width = scr_img.shape
         if self.__height > scr_img_height or self.__width > scr_img_width:
-            return (f'Неправильный размер картинки `что` ({path}) и (или) `где` (ШxВ): что - {self.__width}x'
-                    f'{self.__height}, где - {scr_img_width}x{scr_img_height}')
+            return (f'Размеры картинок (ШxВ): что - {self.__width}x{self.__height}, '
+                    f'где - {scr_img_width}x{scr_img_height}')
         try:
             result = cv2.matchTemplate(img, scr_img, cv2.TM_CCOEFF_NORMED)
         except (cv2.error, Exception) as e:
@@ -288,7 +292,7 @@ class CheckImages:
 
             scr_img_gray = self.__any_img_to_grayscale(scr_path)
             if isinstance(scr_img_gray, str):
-                open_file_error = f"Не получается открыть файл: {scr_path}\n\n\n"
+                open_file_error = f"{scr_img_gray}\n\n\n"
                 all_info.append(open_file_error)
                 self.__console_window.AppendText(open_file_error)
                 continue
