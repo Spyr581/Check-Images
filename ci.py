@@ -45,8 +45,8 @@ class InitServiceOutputInfo:
         return left_indent, right_indent
 
     def print_header(self, scr_image: str) -> (str, str, str, str):
-        screenshot = f'|   {"SCREENSHOT" if 0 == self.__direction else "TEMPLATE"} - {scr_image}   |'
-        precision = f'|   PRECISION - {self.__prec}   ///   '
+        screenshot = f'|   {"СКРИНШОТ" if 0 == self.__direction else "ШАБЛОН"} - {scr_image}   |'
+        precision = f'|   ТОЧНОСТЬ - {self.__prec}   ///   '
         time = datetime.datetime.now()
         time_as_str = time.strftime('%Y-%m-%d %H:%M:%S') + '   |'
         second_string = precision + time_as_str
@@ -55,18 +55,18 @@ class InitServiceOutputInfo:
 
         # 1st string
         left, right = self.__calculate_header_indents(max_length, len(screenshot))
-        screenshot = f'|   {" " * left}{"SCREENSHOT" if 0 == self.__direction else "TEMPLATE"} - ' \
+        screenshot = f'|   {" " * left}{"СКРИНШОТ" if 0 == self.__direction else "ШАБЛОН"} - ' \
                      f'{scr_image}{" " * right}   |'
 
         # 2nd string
         left, right = self.__calculate_header_indents(max_length, len(second_string))
-        precision = f'|   {" " * left}PRECISION - {self.__prec}   ///   '
+        precision = f'|   {" " * left}ТОЧНОСТЬ - {self.__prec}   ///   '
         time_as_str = time.strftime('%Y-%m-%d %H:%M:%S') + f'{" " * right}   |'
         second_string = precision + time_as_str
 
         self.__count_indents()
 
-        header = f'IMAGE{" " * (self.__img_indent - 5)}|COUNT   |THRESHOLD{" " * (self.__threshold_indent - 9)}|' \
+        header = f'КАРТИНКА{" " * (self.__img_indent - 8)}|КОЛ-ВО  |ПОРОГ{" " * (self.__threshold_indent - 5)}|' \
                  f'X{" " * (self.__coord_indent - 1)}|Y{" " * (self.__coord_indent - 1)}'
 
         print('-' * max_length,
@@ -141,11 +141,15 @@ class OutputInfo:
         self.__y = y
 
     def print_one_found_entry(self) -> str:
+        len_x = len(str(self.__x))
+        len_y = len(str(self.__y))
         one_entry = f'{self.__filename}{" " * (self.__tmpl_indent - len(self.__filename))}|' \
                     f'{"  "}{self.__count}{" " * (self.__count_indent - len(str(self.__count)) - 2)}|' \
                     f'{self.__thr}{" " * (self.__threshold_indent - len(str(self.__thr)))}|' \
-                    f'{self.__x}{" " * (self.__coord_indent - len(str(self.__x)))}|' \
-                    f'{self.__y}{" " * (self.__coord_indent - len(str(self.__y)))}'
+                    f'{" " if 1 == len_x else ""}{self.__x}' \
+                    f'{" " * (self.__coord_indent - (2 if 1 == len_x else len_x))}|' \
+                    f'{" " if 1 == len_y else ""}{self.__y}' \
+                    f'{" " * (self.__coord_indent - (2 if 1 == len_y else len_y))}'
         print(one_entry)
 
         return one_entry + '\n'
@@ -153,9 +157,9 @@ class OutputInfo:
     def print_one_not_found_entry(self) -> str:
         one_entry = f'{self.__filename}{" " * (self.__tmpl_indent - len(self.__filename))}|' \
                     f'{"  "}0{" " * (self.__count_indent - 3)}|' \
-                    f'Not found{" " * (self.__threshold_indent - 9)}|' \
-                    f'None{" " * (self.__coord_indent - 4)}|' \
-                    f'None{" " * (self.__coord_indent - 4)}'
+                    f'Не найдено{" " * (self.__threshold_indent - 10)}|' \
+                    f' -{" " * (self.__coord_indent - 2)}|' \
+                    f' -{" " * (self.__coord_indent - 2)}'
         print(one_entry)
 
         return one_entry + '\n'
@@ -204,9 +208,9 @@ class CheckImages:
         try:
             img_rgb = cv2.imread(path)
             if not isinstance(img_rgb, numpy.ndarray):
-                raise RuntimeError("File can't be presented as numpy array")
+                raise RuntimeError("Файл не может быть представлен как numpy array")
         except (cv2.error, RuntimeError, Exception) as e:
-            return f"Can't open file: {path}: {e}"
+            return f"Не получилось открыть файл: {path}: {e}"
 
         return cv2.cvtColor(img_rgb, cv2.COLOR_BGR2GRAY)
 
@@ -215,12 +219,12 @@ class CheckImages:
         self.__height, self.__width = img.shape
         scr_img_height, scr_img_width = scr_img.shape
         if self.__height > scr_img_height or self.__width > scr_img_width:
-            return (f'Incorrect size of `what` ({path}) and `where` images (WxH): what - {self.__width}x'
-                    f'{self.__height}, where - {scr_img_width}x{scr_img_height}')
+            return (f'Неправильный размер картинки `что` ({path}) и (или) `где` (ШxВ): что - {self.__width}x'
+                    f'{self.__height}, где - {scr_img_width}x{scr_img_height}')
         try:
             result = cv2.matchTemplate(img, scr_img, cv2.TM_CCOEFF_NORMED)
         except (cv2.error, Exception) as e:
-            result = f'Any problem to find image {img}: {e}'
+            result = f'Проблема с поиском изображения {path}: {e}'
 
         return result
 
@@ -277,21 +281,21 @@ class CheckImages:
             self.__console_window.AppendText(header_info[0])
 
             if not os.path.exists(scr_path):
-                no_scr_file_warning = f'No screenshot file: {scr_path}\n\n\n'
+                no_scr_file_warning = f'Нет файла скриншота: {scr_path}\n\n\n'
                 all_info.append(no_scr_file_warning)
                 self.__console_window.AppendText(no_scr_file_warning)
                 continue
 
             scr_img_gray = self.__any_img_to_grayscale(scr_path)
             if isinstance(scr_img_gray, str):
-                open_file_error = f"Can't open file: {scr_path}\n\n\n"
+                open_file_error = f"Не получается открыть файл: {scr_path}\n\n\n"
                 all_info.append(open_file_error)
                 self.__console_window.AppendText(open_file_error)
                 continue
 
             for tmpl_path in self.__tmpl_paths:
                 if not os.path.exists(tmpl_path):
-                    no_tmpl_file_warning = f'NO TEMPLATE FILE: {tmpl_path}'
+                    no_tmpl_file_warning = f'Нет файла шаблона: {tmpl_path}'
                     one_entry_to_output = self.__create_empty_output_entry()
                     one_entry = one_entry_to_output.print_any_warning(no_tmpl_file_warning)
                     self.__console_window.AppendText(one_entry)

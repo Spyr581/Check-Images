@@ -45,6 +45,11 @@ class DropTarget(wx.FileDropTarget, GUIUtils):
         self.l_filepaths = l_filepaths
         self.emb_folders = emb_folders
 
+    def reinitialize(self, element, l_filepaths, emb_folders):
+        self.element = element
+        self.l_filepaths = l_filepaths
+        self.emb_folders = emb_folders
+
     @classmethod
     def check_file_extension(cls, f):
         return os.path.splitext(f)[1] in cls.extensions
@@ -88,6 +93,7 @@ class DropTarget(wx.FileDropTarget, GUIUtils):
                 short_path = self.format_file_name(filename, max_length)
                 self.element.Append(short_path)
                 self.l_filepaths.append((filename, short_path))
+        print(f'DROP: {self.l_filepaths=}')
         return True
 
 
@@ -133,19 +139,20 @@ class CIMainWindow(wx.Frame, GUIUtils):
 
         self.listbox_left = wx.ListBox(panel_top, choices=[], style=wx.LB_MULTIPLE, id=1)
         # Устанавливаем DropTarget
-        self.listbox_left.SetDropTarget(DropTarget(self.listbox_left,
-                                                   self.l_left_selection,
-                                                   self.settings.embedded_folders))
+        self.droptarget_left = DropTarget(self.listbox_left, self.l_left_selection, self.settings.embedded_folders)
+        self.listbox_left.SetDropTarget(self.droptarget_left)
         hbox_left.Add(self.listbox_left, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         # Кнопки +, -, Очистить для левого поля
         vbox_buttons_left = wx.BoxSizer(wx.VERTICAL)
         btn_plus_left = wx.Button(panel_top, label="+", size=(50, 30), id=10)
         btn_minus_left = wx.Button(panel_top, label="-", size=(50, 30), id=11)
-        btn_clear_left = wx.Button(panel_top, label="Очистить", size=(80, 30), id=12)
+        btn_refresh_left = wx.Button(panel_top, label="Обновить", size=(80, 30), id=12)
+        btn_clear_left = wx.Button(panel_top, label="Очистить", size=(80, 30), id=13)
 
         vbox_buttons_left.Add(btn_plus_left, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         vbox_buttons_left.Add(btn_minus_left, 0, wx.EXPAND | wx.ALL, 5)
+        vbox_buttons_left.Add(btn_refresh_left, 0, wx.EXPAND | wx.ALL, 5)
         vbox_buttons_left.Add(btn_clear_left, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
         hbox_left.Add(vbox_buttons_left, 0, wx.EXPAND | wx.ALL, 5)
@@ -166,19 +173,20 @@ class CIMainWindow(wx.Frame, GUIUtils):
 
         self.listbox_right = wx.ListBox(panel_top, choices=[], style=wx.LB_MULTIPLE, id=2)
         # Устанавливаем DropTarget
-        self.listbox_right.SetDropTarget(DropTarget(self.listbox_right,
-                                                    self.l_right_selection,
-                                                    self.settings.embedded_folders))
+        self.droptarget_right = DropTarget(self.listbox_right, self.l_right_selection, self.settings.embedded_folders)
+        self.listbox_right.SetDropTarget(self.droptarget_right)
         hbox_right.Add(self.listbox_right, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 5)
 
         # Кнопки +, -, Очистить для правого поля
         vbox_buttons_right = wx.BoxSizer(wx.VERTICAL)
         btn_plus_right = wx.Button(panel_top, label="+", size=(50, 30), id=20)
         btn_minus_right = wx.Button(panel_top, label="-", size=(50, 30), id=21)
-        btn_clear_right = wx.Button(panel_top, label="Очистить", size=(80, 30), id=22)
+        btn_refresh_right = wx.Button(panel_top, label="Обновить", size=(80, 30), id=22)
+        btn_clear_right = wx.Button(panel_top, label="Очистить", size=(80, 30), id=23)
 
         vbox_buttons_right.Add(btn_plus_right, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
         vbox_buttons_right.Add(btn_minus_right, 0, wx.EXPAND | wx.ALL, 5)
+        vbox_buttons_right.Add(btn_refresh_right, 0, wx.EXPAND | wx.ALL, 5)
         vbox_buttons_right.Add(btn_clear_right, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
         hbox_right.Add(vbox_buttons_right, 0, wx.EXPAND | wx.ALL, 5)
@@ -193,13 +201,16 @@ class CIMainWindow(wx.Frame, GUIUtils):
         hbox_bottom_buttons = wx.BoxSizer(wx.HORIZONTAL)
         btn_search = wx.Button(panel_top, label="Искать", size=(80, 30))
         btn_clear_bottom = wx.Button(panel_top, label="Очистить", size=(80, 30))
+        btn_clear_all = wx.Button(panel_top, label="Очистить все", size=(100, 30))
         btn_settings = wx.Button(panel_top, label="Настройки", size=(80, 30))
 
         hbox_bottom_buttons.AddStretchSpacer()
-        hbox_bottom_buttons.Add(btn_search, 0, wx.EXPAND | wx.RIGHT, 15)
-        hbox_bottom_buttons.Add(btn_clear_bottom, 0, wx.EXPAND | wx.RIGHT | wx.LEFT, 15)
-        hbox_bottom_buttons.Add(btn_settings, 0, wx.EXPAND | wx.LEFT, 100)
+        hbox_bottom_buttons.Add(btn_search, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 15)
+        hbox_bottom_buttons.Add(btn_clear_bottom, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 15)
+        hbox_bottom_buttons.Add((50, 0), 0)
+        hbox_bottom_buttons.Add(btn_clear_all, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
         hbox_bottom_buttons.AddStretchSpacer()
+        hbox_bottom_buttons.Add(btn_settings, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 15)
 
         # Добавляем в вертикальный сайзер еще кнопки
         vbox.Add(hbox_bottom_buttons, 0, wx.EXPAND | wx.TOP, 10)
@@ -225,33 +236,43 @@ class CIMainWindow(wx.Frame, GUIUtils):
         sizer.Add(splitter, 1, wx.EXPAND)
         self.SetSizer(sizer)
 
-        # Установка/снятие выбора в списке
-        self.listbox_left.Bind(wx.EVT_LEFT_UP, self.on_left_click)
-        self.listbox_right.Bind(wx.EVT_LEFT_UP, self.on_left_click)
-
         # Изменение ширины листбокса
         self.Bind(wx.EVT_SIZE, self.on_size)
 
         # Устанавливаем обработчики событий для кнопок
         self.Bind(wx.EVT_BUTTON, self.on_plus, btn_plus_left)
         self.Bind(wx.EVT_BUTTON, self.on_minus, btn_minus_left)
+        self.Bind(wx.EVT_BUTTON, self.on_refresh, btn_refresh_left)
         self.Bind(wx.EVT_BUTTON, self.on_clear, btn_clear_left)
 
         self.Bind(wx.EVT_BUTTON, self.on_plus, btn_plus_right)
         self.Bind(wx.EVT_BUTTON, self.on_minus, btn_minus_right)
+        self.Bind(wx.EVT_BUTTON, self.on_refresh, btn_refresh_right)
         self.Bind(wx.EVT_BUTTON, self.on_clear, btn_clear_right)
 
         self.Bind(wx.EVT_BUTTON, self.on_search, btn_search)
         self.Bind(wx.EVT_BUTTON, self.on_clear_bottom, btn_clear_bottom)
+        self.Bind(wx.EVT_BUTTON, self.on_clear_all, btn_clear_all)
         self.Bind(wx.EVT_BUTTON, self.show_settings_dialog, btn_settings)
 
         self.Centre()
         self.Show(True)
 
+    def __reinitialize_droptarget(self, left_or_right):
+        if 'left' == left_or_right:
+            self.droptarget_left.reinitialize(self.listbox_left,
+                                              self.l_left_selection,
+                                              self.settings.embedded_folders)
+        elif 'right' == left_or_right:
+            self.droptarget_right.reinitialize(self.listbox_right,
+                                              self.l_right_selection,
+                                              self.settings.embedded_folders)
+        else:
+            raise ValueError('Incoorect `left_or_right` value: must be left or right')
 
     def on_plus(self, event):
         button_id = event.GetEventObject().GetId()
-        wildcard = "All Supported Images|*.jpg;*.png;*.webp"
+        wildcard = "Все изображения|*.jpg;*.png;*.webp"
         style = wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE
         dialog = wx.FileDialog(self, "Выберите файлы", wildcard=wildcard, style=style)
         if dialog.ShowModal() == wx.ID_OK:
@@ -262,11 +283,13 @@ class CIMainWindow(wx.Frame, GUIUtils):
                     short_path = self.format_file_name(file_path, max_length)
                     self.listbox_left.Append(short_path)
                     self.l_left_selection.append((file_path, short_path))
+                    self.__reinitialize_droptarget('left')
                 elif button_id == 20:
                     max_length = self.get_max_text_length(self.listbox_right, file_path)
                     short_path = self.format_file_name(file_path, max_length)
                     self.listbox_right.Append(short_path)
                     self.l_right_selection.append((file_path, short_path))
+                    self.__reinitialize_droptarget('right')
         dialog.Destroy()
 
     def on_minus(self, event):
@@ -279,6 +302,7 @@ class CIMainWindow(wx.Frame, GUIUtils):
                 for idx in sorted(selected_items_left, reverse=True):
                     self.listbox_left.Delete(idx)
                     del self.l_left_selection[idx]
+            self.__reinitialize_droptarget('left')
         elif button_id == 21:
             print(self.l_right_selection)
             selected_items_right = self.listbox_right.GetSelections()
@@ -287,23 +311,45 @@ class CIMainWindow(wx.Frame, GUIUtils):
                 for idx in sorted(selected_items_right, reverse=True):
                     self.listbox_right.Delete(idx)
                     del self.l_right_selection[idx]
+            self.__reinitialize_droptarget('right')
+
+    def on_refresh(self, event):
+        button_id = event.GetEventObject().GetId()
+        l_temp = []
+        if button_id == 12:
+            self.__clear_listbox(self.listbox_left)
+            for path, short_path in sorted(self.l_left_selection, key=lambda x: x[0]):
+                if os.path.exists(path):
+                    print(path, short_path)
+                    l_temp.append((path, short_path))
+                    self.listbox_left.Append(short_path)
+            self.l_left_selection = l_temp
+            self.__reinitialize_droptarget('left')
+        elif button_id == 22:
+            self.__clear_listbox(self.listbox_right)
+            for path, short_path in sorted(self.l_right_selection, key=lambda x: x[0]):
+                if os.path.exists(path):
+                    l_temp.append((path, short_path))
+                    self.listbox_right.Append(short_path)
+            self.l_right_selection = l_temp
+            self.__reinitialize_droptarget('right')
+
+    def __clear_listbox(self, listbox):
+        selections = listbox.GetSelections()  # list
+        for idx in selections:
+            listbox.Deselect(idx)
+        listbox.Clear()
 
     def on_clear(self, event):
         button_id = event.GetEventObject().GetId()
-        if button_id == 12:
-            selections = self.listbox_left.GetSelections()   # list
-            for idx in selections:
-                self.listbox_left.Deselect(idx)
-            self.last_selected_index_left = wx.NOT_FOUND
-            self.listbox_left.Clear()
+        if button_id == 13:
+            self.__clear_listbox(self.listbox_left)
             self.l_left_selection.clear()
-        elif button_id == 22:
-            selections = self.listbox_left.GetSelections()   # list
-            for idx in selections:
-                self.listbox_left.Deselect(idx)
-            self.last_selected_index_right = wx.NOT_FOUND
-            self.listbox_right.Clear()
+            self.__reinitialize_droptarget('left')
+        elif button_id == 23:
+            self.__clear_listbox(self.listbox_right)
             self.l_right_selection.clear()
+            self.__reinitialize_droptarget('right')
 
     def on_search(self, event):
         if not self.l_left_selection or not self.l_right_selection:
@@ -324,34 +370,6 @@ class CIMainWindow(wx.Frame, GUIUtils):
     def on_clear_bottom(self, event):
         self.console_text.SetValue("")
 
-    def on_left_click(self, event):
-        # # Получаем координаты мыши
-        # x, y = event.GetPosition()
-        # selected_id = event.GetId()
-        #
-        # # Если индекс совпадает с последним выбранным, снимаем выделение
-        # if selected_id == 1:
-        #     # Определяем индекс элемента, над которым находится мышь
-        #     index = self.listbox_left.HitTest((x, y))
-        #     if index == self.last_selected_index_left:
-        #         self.listbox_left.Deselect(index)
-        #         self.last_selected_index_left = wx.NOT_FOUND
-        #     else:
-        #         # Иначе, устанавливаем выделение на текущем элементе
-        #         self.listbox_left.SetSelection(index)
-        #         self.last_selected_index_left = index
-        # elif selected_id == 2:
-        #     index = self.listbox_right.HitTest((x, y))
-        #     if index == self.last_selected_index_right:
-        #         self.listbox_right.Deselect(index)
-        #         self.last_selected_index_right = wx.NOT_FOUND
-        #     else:
-        #         # Иначе, устанавливаем выделение на текущем элементе
-        #         self.listbox_right.SetSelection(index)
-        #         self.last_selected_index_right = index
-
-        event.Skip()
-
     def on_size(self, event):
         for idx, filepaths in enumerate(self.l_left_selection):   # filepaths - это кортеж, нужен 0 элемент
             max_length = self.get_max_text_length(self.listbox_left, filepaths[0])
@@ -364,6 +382,15 @@ class CIMainWindow(wx.Frame, GUIUtils):
             self.listbox_right.SetString(idx, short_path)
 
         event.Skip()
+
+    def on_clear_all(self, event):
+        self.__clear_listbox(self.listbox_left)
+        self.l_left_selection.clear()
+        self.__reinitialize_droptarget('left')
+        self.__clear_listbox(self.listbox_right)
+        self.l_right_selection.clear()
+        self.__reinitialize_droptarget('right')
+        self.console_text.SetValue("")
 
     def show_settings_dialog(self, event):
         # Создание и отображение диалогового окна
@@ -461,7 +488,7 @@ class SettingsDialog(wx.Dialog):
 
     def on_browse(self, event):
         # Создаем диалоговое окно сохранения файла
-        wildcard = "Text files (*.txt)|*.txt"
+        wildcard = "Текстовые файлы (*.txt)|*.txt"
         file_dialog = wx.FileDialog(self, "Выберите файл для сохранения",
                                     style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT,
                                     wildcard=wildcard)
