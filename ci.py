@@ -35,7 +35,7 @@ class InitServiceOutputInfo:
 
         self.__img_indent = max_length + 5
         self.__count_indent = 8
-        self.__threshold_indent = len(str(self.__prec)) + 6
+        self.__threshold_indent = self.__prec + 6
         self.__coord_indent = 8
 
     @staticmethod
@@ -46,7 +46,7 @@ class InitServiceOutputInfo:
 
     def print_header(self, scr_image: str) -> (str, str, str, str):
         screenshot = f'|   {"СКРИНШОТ" if 0 == self.__direction else "ШАБЛОН"} - {scr_image}   |'
-        precision = f'|   ТОЧНОСТЬ - {self.__prec}   ///   '
+        precision = f'|   ТОЧНОСТЬ - 10^-{self.__prec}   ///   '
         time = datetime.datetime.now()
         time_as_str = time.strftime('%Y-%m-%d %H:%M:%S') + '   |'
         second_string = precision + time_as_str
@@ -60,7 +60,7 @@ class InitServiceOutputInfo:
 
         # 2nd string
         left, right = self.__calculate_header_indents(max_length, len(second_string))
-        precision = f'|   {" " * left}ТОЧНОСТЬ - {self.__prec}   ///   '
+        precision = f'|   {" " * left}ТОЧНОСТЬ - 10^-{self.__prec}   ///   '
         time_as_str = time.strftime('%Y-%m-%d %H:%M:%S') + f'{" " * right}   |'
         second_string = precision + time_as_str
 
@@ -108,7 +108,7 @@ class OutputInfo:
     def __init__(self,
                  filename: str,
                  thr: (float, None),
-                 precision: float,
+                 precision: int,
                  tmpl_indent: int,
                  count_indent: int,
                  thr_indent: int,
@@ -119,7 +119,7 @@ class OutputInfo:
         """
         :param path_to_tmpls: str, path to folder with image templates
         :param thr:           float
-        :param precision:     float
+        :param precision:     int
         :param tmpl_indent:   int, calculated indent for the template name field
         :param count_indent:  int, calculated indent for the count of found templates on screen image field
         :param thr_indent:    int, calculated indent for the threshold field
@@ -190,7 +190,7 @@ class CheckImages:
 
         self.__console_window = console   # wx.TextCtrl object
         self.__min_threshold: float = min_threshold
-        self.__precision: float = precision
+        self.__precision: int = precision
         self.__save_txt: bool = save_txt
         self.__save_to: str = save_to
 
@@ -199,7 +199,7 @@ class CheckImages:
         self.__width = None
 
     def __round_threshold(self, thr: float) -> float:
-        multiplier = 10 ** (len(str(self.__precision)) - 2)
+        multiplier = 10 ** self.__precision
         thr = int(thr * multiplier)
         return thr / multiplier
 

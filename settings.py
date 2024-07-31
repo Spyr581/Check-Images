@@ -30,7 +30,7 @@ class SettingsData:
     _instance = None
 
     default_min_threshold = BaseSettingsDescriptor(0.6)
-    default_precision = BaseSettingsDescriptor(0.0001)
+    default_precision = BaseSettingsDescriptor(4)
     default_direction = BaseSettingsDescriptor(0)
     default_embedded_folders = BaseSettingsDescriptor(False)
     default_save_txt = BaseSettingsDescriptor(True)
@@ -63,10 +63,10 @@ class SettingsUtils:
 
     def check_settings_on_load(self):
         # Проверка загружаемых настроек из ini файла
-        if not (0 <= float(self.settings.min_threshold) <= 0.999999):
+        if not (0.01 <= float(self.settings.min_threshold) <= 1):
             self.settings.min_threshold = self.settings.default_min_threshold
 
-        if not (0.0000001 <= float(self.settings.precision) <= 0.1):
+        if not (1 <= int(self.settings.precision) <= 8):
             self.settings.precision = self.settings.default_precision
 
         if self.settings.direction not in (0, 1):
@@ -82,6 +82,14 @@ class SettingsUtils:
         if not os.path.isabs(self.settings.save_to) or any(char in forbidden_symbols for char in self.settings.save_to):
             self.settings.save_to = self.settings.default_save_to
 
+    def __write_default_values(self):
+        self.settings.min_threshold = self.settings.default_min_threshold
+        self.settings.precision = self.settings.default_precision
+        self.settings.direction = self.settings.default_direction
+        self.settings.embedded_folders = self.settings.default_embedded_folders
+        self.settings.save_txt = self.settings.default_save_txt
+        self.settings.save_to = self.settings.default_save_to
+
     def load_settings(self):
         config = configparser.ConfigParser()
 
@@ -91,7 +99,7 @@ class SettingsUtils:
 
             # Получаем значения параметров из файла .ini
             self.settings.min_threshold = config.getfloat('Settings', 'MinThreshold')
-            self.settings.precision = config.getfloat('Settings', 'Precision')
+            self.settings.precision = config.getint('Settings', 'Precision')
             self.settings.direction = config.getint('Settings', 'CheckDirection')
             self.settings.embedded_folders = config.getboolean('Settings', 'EmbeddedFolders')
             self.settings.save_txt = config.getboolean('Settings', 'SaveTxt')
@@ -101,18 +109,13 @@ class SettingsUtils:
 
         except (configparser.Error, ValueError, FileNotFoundError):
             # Если возникает ошибка, используем значения по умолчанию
-            self.settings.min_threshold = self.settings.default_min_threshold
-            self.settings.precision = self.settings.default_precision
-            self.settings.direction = self.settings.default_direction
-            self.settings.embedded_folders = self.settings.default_embedded_folders
-            self.settings.save_txt = self.settings.default_save_txt
-            self.settings.save_to = self.settings.default_save_to
+            self.__write_default_values()
 
     def save_settings(self, value1, value2, value3, value4, value5, value6):
         config = configparser.ConfigParser()
 
         self.settings.min_threshold = value1
-        self.settings.text_precision = value2
+        self.settings.precision = value2
         self.settings.direction = value3
         self.settings.embedded_folders = value4
         self.settings.save_txt = value5
@@ -131,3 +134,6 @@ class SettingsUtils:
         # Сохраняем конфигурацию в файл
         with open('./check_images.ini', 'w') as configfile:
             config.write(configfile)
+
+    def reset_settings(self):
+        self.__write_default_values()

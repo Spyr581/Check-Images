@@ -3,6 +3,7 @@
 
 import wx
 import os
+import math
 from ci import CheckImages
 from settings import SettingsData, SettingsUtils
 
@@ -382,6 +383,10 @@ class CIMainWindow(wx.Frame, GUIUtils):
 class SettingsDialog(wx.Dialog):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
+        self.__min_thr = 0.01
+        self.__max_thr = 1
+        self.__min_prec = 1
+        self.__max_prec = 8
 
         self.settings = SettingsData()
         self.settings_utils = SettingsUtils()
@@ -391,22 +396,22 @@ class SettingsDialog(wx.Dialog):
         gbs = wx.GridBagSizer(9, 6)   # row, col
 
         # Минимальный порог
-        label_threshold = wx.StaticText(panel, label="Минимальный порог")
-        self.text_threshold = wx.TextCtrl(panel)
+        label_threshold = wx.StaticText(panel, label=f"Минимальный порог: {self.__min_thr}-{self.__max_thr}")
+        self.spin_threshold = wx.SpinCtrlDouble(panel, min=self.__min_thr, max=self.__max_thr, inc=0.01)
         gbs.Add(label_threshold, pos=(0, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(self.text_threshold, pos=(0, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(self.spin_threshold, pos=(0, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Точность
-        label_precision = wx.StaticText(panel, label="Точность")
-        self.text_precision = wx.TextCtrl(panel)
+        label_precision = wx.StaticText(panel, label=f"Точность (10^-N): {self.__min_prec}-{self.__max_prec}")
+        self.spin_precision = wx.SpinCtrl(panel, min=self.__min_prec, max=self.__max_prec)
+        self.spin_precision.SetIncrement(1)
         gbs.Add(label_precision, pos=(1, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
-        gbs.Add(self.text_precision, pos=(1, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
+        gbs.Add(self.spin_precision, pos=(1, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Выпадающий список
         dropdown_direction = wx.StaticText(panel, label="Направление поиска")
         choices = ["Картинки по скриншотам", "Скриншоты по картинкам"]
         self.dropdown_direction = wx.Choice(panel, choices=choices)
-        # self.dropdown.SetSelection(0)
         gbs.Add(dropdown_direction, pos=(2, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
         gbs.Add(self.dropdown_direction, pos=(2, 2), span=(1, 3),
                 flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
@@ -434,37 +439,25 @@ class SettingsDialog(wx.Dialog):
 
         vbox.Add(wx.StaticText(panel, label=""), 1, wx.EXPAND)
 
-        # Кнопки Ок и Отмена
+        # Кнопки Ок, Отмена, По умолчанию
         btn_ok = wx.Button(panel, label="OK")
         btn_cancel = wx.Button(panel, label="Отмена")
+        btn_default = wx.Button(panel, label="По умолчанию")
         hbox_btns = wx.BoxSizer(wx.HORIZONTAL)
         hbox_btns.Add(btn_ok, 0, wx.RIGHT, 20)
-        hbox_btns.Add(btn_cancel, 0, wx.LEFT, 20)
+        hbox_btns.Add(btn_cancel, 0, wx.RIGHT, 30)
+        hbox_btns.Add(btn_default, 0, wx.RIGHT, 20)
         vbox.Add(hbox_btns, 0, wx.ALIGN_CENTER | wx.BOTTOM, 20)
 
         self.set_window_settings()
         panel.SetSizer(vbox)
         self.Centre()
 
-        self.text_threshold.Bind(wx.EVT_CHAR, self.on_text_char)
-        self.text_precision.Bind(wx.EVT_CHAR, self.on_text_char)
         self.Bind(wx.EVT_BUTTON, self.on_browse, self.btn_browse)
         self.Bind(wx.EVT_BUTTON, self.on_ok, btn_ok)
         self.Bind(wx.EVT_BUTTON, self.on_cancel, btn_cancel)
+        self.Bind(wx.EVT_BUTTON, self.on_default, btn_default)
         self.Bind(wx.EVT_CHECKBOX, self.on_checkbox_change, self.checkbox_save_txt)
-
-    @staticmethod
-    def on_text_char(event):
-        # Обработчик события ввода символа в текстовое поле
-        key = event.GetKeyCode()
-
-        # Разрешаем ввод только цифр 0-9 и точки
-        if key < wx.WXK_SPACE or key == wx.WXK_DELETE or key > 255:
-            event.Skip()
-            return
-
-        if chr(key) in '0123456789.':
-            event.Skip()
 
     def on_browse(self, event):
         # Создаем диалоговое окно сохранения файла
@@ -483,18 +476,6 @@ class SettingsDialog(wx.Dialog):
 
     def on_ok(self, event):
         # Обработка нажатия кнопки "OK"
-        # Проверка порога
-        if not (0 <= float(self.text_threshold.GetValue()) <= 0.999999):
-            wx.MessageBox("Значение минимального порога должно быть\nв пределах 0...0.999999.",
-                          "Неправильный порог", wx.OK | wx.ICON_ERROR)
-            return
-
-        # Проверка точности
-        if not (0.0000001 <= float(self.text_precision.GetValue()) <= 0.1):
-            wx.MessageBox("Значение точности должно быть\nв пределах 0.0000001...0.1.",
-                          "Неправильный порог", wx.OK | wx.ICON_ERROR)
-            return
-
         # Проверка пути сохранения файла
         if self.checkbox_save_txt.GetValue():
             save_path = self.text_save_to.GetValue()
@@ -505,8 +486,8 @@ class SettingsDialog(wx.Dialog):
                 return
 
         # Сравнение текущих значений с загруженными
-        min_threshold = float(self.text_threshold.GetValue())
-        precision = float(self.text_precision.GetValue())
+        min_threshold = float(self.spin_threshold.GetValue())
+        precision = int(self.spin_precision.GetValue())
         direction = self.dropdown_direction.GetSelection()
         embedded_folders = self.checkbox_embedded_folders.GetValue()
         save_txt = self.checkbox_save_txt.GetValue()
@@ -529,6 +510,10 @@ class SettingsDialog(wx.Dialog):
         # Обработка нажатия кнопки "Отмена"
         self.EndModal(wx.ID_CANCEL)
 
+    def on_default(self, event):
+        self.settings_utils.reset_settings()
+        self.__set_settings_to_fields()
+
     def on_checkbox_change(self, event):
         checkbox = event.GetEventObject()
 
@@ -539,12 +524,9 @@ class SettingsDialog(wx.Dialog):
         self.text_save_to.Enable(is_checked)
         self.btn_browse.Enable(is_checked)
 
-    def set_window_settings(self):
-        self.settings_utils.load_settings()
-
-        # Устанавливаем значения в соответствующие элементы окна
-        self.text_threshold.SetValue(str(self.settings.min_threshold))
-        self.text_precision.SetValue(str(self.settings.precision))
+    def __set_settings_to_fields(self):
+        self.spin_threshold.SetValue(self.settings.min_threshold)
+        self.spin_precision.SetValue(self.settings.precision)
         self.dropdown_direction.SetSelection(self.settings.direction)
         self.checkbox_embedded_folders.SetValue(self.settings.embedded_folders)
         self.checkbox_save_txt.SetValue(self.settings.save_txt)
@@ -554,8 +536,14 @@ class SettingsDialog(wx.Dialog):
         self.text_save_to.Enable(self.settings.save_txt)
         self.btn_browse.Enable(self.settings.save_txt)
 
+    def set_window_settings(self):
+        self.settings_utils.load_settings()
+
+        # Устанавливаем значения в соответствующие элементы окна
+        self.__set_settings_to_fields()
+
         self.d_loaded['min_threshold'] = float(self.settings.min_threshold)
-        self.d_loaded['precision'] = float(self.settings.precision)
+        self.d_loaded['precision'] = int(self.settings.precision)
         self.d_loaded['direction'] = self.settings.direction
         self.d_loaded['embedded_folders'] = self.settings.embedded_folders
         self.d_loaded['save_txt'] = self.settings.save_txt
