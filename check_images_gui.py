@@ -1,9 +1,11 @@
 # Check images by OpenCV with GUI
-# Version 1.1
+# Version 1.2
+# https://github.com/Spyr581/Check-Images/tree/GUI
+
 
 import wx
 import os
-import math
+import subprocess
 from ci import CheckImages
 from settings import SettingsData, SettingsUtils
 
@@ -74,13 +76,12 @@ class DropTarget(wx.FileDropTarget, GUIUtils):
 
                 else:
                     files_in_folder = [f for f in os.listdir(filename) if os.path.isfile(os.path.join(filename, f))]
-
                     for file_in_folder in files_in_folder:
                         if not self.check_file_extension(file_in_folder):
                             continue
-                        if self.check_file_presence(file_in_folder, self.l_filepaths):
-                            continue
                         full_filename = os.path.join(filename, file_in_folder)
+                        if self.check_file_presence(full_filename, self.l_filepaths):
+                            continue
                         max_length = self.get_max_text_length(self.element, full_filename)
                         short_path = self.format_file_name(full_filename, max_length)
                         self.element.Append(short_path)
@@ -106,6 +107,9 @@ class CIMainWindow(wx.Frame, GUIUtils):
                             'right': []}
         self.listbox = {}
         self.droptarget = {}
+        self.listbox_buttons = {'left': {}, 'right': {}}
+
+        self.mouse_position = None
 
         self.settings = SettingsData()
         self.settings_utils = SettingsUtils()
@@ -147,15 +151,17 @@ class CIMainWindow(wx.Frame, GUIUtils):
 
         # Кнопки +, -, Очистить для левого поля
         vbox_buttons_left = wx.BoxSizer(wx.VERTICAL)
-        btn_plus_left = wx.Button(panel_top, label="+", size=(50, 30), id=10)
-        btn_minus_left = wx.Button(panel_top, label="-", size=(50, 30), id=11)
-        btn_refresh_left = wx.Button(panel_top, label="Обновить", size=(80, 30), id=12)
-        btn_clear_left = wx.Button(panel_top, label="Очистить", size=(80, 30), id=13)
+        self.listbox_buttons['left']['plus'] = wx.Button(panel_top, label="+", size=(50, 30), id=10)
+        self.listbox_buttons['left']['minus'] = wx.Button(panel_top, label="-", size=(50, 30), id=11)
+        self.listbox_buttons['left']['refresh'] = wx.Button(panel_top, label="Обновить", size=(80, 30), id=12)
+        self.listbox_buttons['left']['clear'] = wx.Button(panel_top, label="Очистить", size=(80, 30), id=13)
 
-        vbox_buttons_left.Add(btn_plus_left, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
-        vbox_buttons_left.Add(btn_minus_left, 0, wx.EXPAND | wx.ALL, 5)
-        vbox_buttons_left.Add(btn_refresh_left, 0, wx.EXPAND | wx.ALL, 5)
-        vbox_buttons_left.Add(btn_clear_left, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        vbox_buttons_left.Add(self.listbox_buttons['left']['plus'], 0,
+                              wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        vbox_buttons_left.Add(self.listbox_buttons['left']['minus'], 0, wx.EXPAND | wx.ALL, 5)
+        vbox_buttons_left.Add(self.listbox_buttons['left']['refresh'], 0, wx.EXPAND | wx.ALL, 5)
+        vbox_buttons_left.Add(self.listbox_buttons['left']['clear'], 0,
+                              wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
         hbox_left.Add(vbox_buttons_left, 0, wx.EXPAND | wx.ALL, 5)
 
@@ -181,15 +187,17 @@ class CIMainWindow(wx.Frame, GUIUtils):
 
         # Кнопки +, -, Очистить для правого поля
         vbox_buttons_right = wx.BoxSizer(wx.VERTICAL)
-        btn_plus_right = wx.Button(panel_top, label="+", size=(50, 30), id=20)
-        btn_minus_right = wx.Button(panel_top, label="-", size=(50, 30), id=21)
-        btn_refresh_right = wx.Button(panel_top, label="Обновить", size=(80, 30), id=22)
-        btn_clear_right = wx.Button(panel_top, label="Очистить", size=(80, 30), id=23)
+        self.listbox_buttons['right']['plus'] = wx.Button(panel_top, label="+", size=(50, 30), id=20)
+        self.listbox_buttons['right']['minus'] = wx.Button(panel_top, label="-", size=(50, 30), id=21)
+        self.listbox_buttons['right']['refresh'] = wx.Button(panel_top, label="Обновить", size=(80, 30), id=22)
+        self.listbox_buttons['right']['clear'] = wx.Button(panel_top, label="Очистить", size=(80, 30), id=23)
 
-        vbox_buttons_right.Add(btn_plus_right, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
-        vbox_buttons_right.Add(btn_minus_right, 0, wx.EXPAND | wx.ALL, 5)
-        vbox_buttons_right.Add(btn_refresh_right, 0, wx.EXPAND | wx.ALL, 5)
-        vbox_buttons_right.Add(btn_clear_right, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
+        vbox_buttons_right.Add(self.listbox_buttons['right']['plus'], 0,
+                               wx.EXPAND | wx.LEFT | wx.RIGHT | wx.BOTTOM, 5)
+        vbox_buttons_right.Add(self.listbox_buttons['right']['minus'], 0, wx.EXPAND | wx.ALL, 5)
+        vbox_buttons_right.Add(self.listbox_buttons['right']['refresh'], 0, wx.EXPAND | wx.ALL, 5)
+        vbox_buttons_right.Add(self.listbox_buttons['right']['clear'], 0,
+                               wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
 
         hbox_right.Add(vbox_buttons_right, 0, wx.EXPAND | wx.ALL, 5)
 
@@ -241,16 +249,23 @@ class CIMainWindow(wx.Frame, GUIUtils):
         # Изменение ширины листбокса
         self.Bind(wx.EVT_SIZE, self.on_size)
 
-        # Устанавливаем обработчики событий для кнопок
-        self.Bind(wx.EVT_BUTTON, self.on_plus, btn_plus_left)
-        self.Bind(wx.EVT_BUTTON, self.on_minus, btn_minus_left)
-        self.Bind(wx.EVT_BUTTON, self.on_refresh, btn_refresh_left)
-        self.Bind(wx.EVT_BUTTON, self.on_clear, btn_clear_left)
+        # # Привязываем событие щелчка мыши для сохранения позиции
+        self.listbox['left'].Bind(wx.EVT_LEFT_DOWN, self.on_listbox_left_click)
+        self.listbox['right'].Bind(wx.EVT_LEFT_DOWN, self.on_listbox_left_click)
 
-        self.Bind(wx.EVT_BUTTON, self.on_plus, btn_plus_right)
-        self.Bind(wx.EVT_BUTTON, self.on_minus, btn_minus_right)
-        self.Bind(wx.EVT_BUTTON, self.on_refresh, btn_refresh_right)
-        self.Bind(wx.EVT_BUTTON, self.on_clear, btn_clear_right)
+        # Двойной щелчок по пути файла
+        self.Bind(wx.EVT_LISTBOX_DCLICK, self.on_double_click)
+
+        # Устанавливаем обработчики событий для кнопок
+        self.Bind(wx.EVT_BUTTON, self.on_plus, self.listbox_buttons['left']['plus'])
+        self.Bind(wx.EVT_BUTTON, self.on_minus, self.listbox_buttons['left']['minus'])
+        self.Bind(wx.EVT_BUTTON, self.on_refresh, self.listbox_buttons['left']['refresh'])
+        self.Bind(wx.EVT_BUTTON, self.on_clear, self.listbox_buttons['left']['clear'])
+
+        self.Bind(wx.EVT_BUTTON, self.on_plus, self.listbox_buttons['right']['plus'])
+        self.Bind(wx.EVT_BUTTON, self.on_minus, self.listbox_buttons['right']['minus'])
+        self.Bind(wx.EVT_BUTTON, self.on_refresh, self.listbox_buttons['right']['refresh'])
+        self.Bind(wx.EVT_BUTTON, self.on_clear, self.listbox_buttons['right']['clear'])
 
         self.Bind(wx.EVT_BUTTON, self.on_search, btn_search)
         self.Bind(wx.EVT_BUTTON, self.on_clear_bottom, btn_clear_bottom)
@@ -259,6 +274,33 @@ class CIMainWindow(wx.Frame, GUIUtils):
 
         self.Centre()
         self.Show(True)
+
+    def on_listbox_left_click(self, event):
+        self.mouse_position = event.GetPosition()
+        event.Skip()
+
+    def on_double_click(self, event):
+        if self.mouse_position is not None:
+            listbox_id = event.GetEventObject().GetId()
+            if 1 == listbox_id:
+                left_or_right = 'left'
+            elif 2 == listbox_id:
+                left_or_right = 'right'
+            else:
+                raise ValueError(f'Incorrect id of listbox: {listbox_id}')
+            index = self.listbox[left_or_right].HitTest(self.mouse_position)
+            image_path = self.added_files[left_or_right][index][0]
+            self.open_image(image_path)
+        event.Skip()
+
+    def open_image(self, image_path):
+        # Открытие изображения в стандартном просмотрщике
+        if wx.Platform == "__WXMSW__":
+            os.startfile(image_path)
+        elif wx.Platform == "__WXMAC__":
+            subprocess.call(["open", image_path])
+        else:
+            subprocess.call(["xdg-open", image_path])
 
     def __reinitialize_droptarget(self, left_or_right):
         self.droptarget[left_or_right].reinitialize(self.listbox[left_or_right],
@@ -378,6 +420,8 @@ class CIMainWindow(wx.Frame, GUIUtils):
         dlg = SettingsDialog(self, title="Настройки", size=(640, 400))
         dlg.ShowModal()
         dlg.Destroy()
+        self.__reinitialize_droptarget('left')
+        self.__reinitialize_droptarget('right')
 
 
 class SettingsDialog(wx.Dialog):

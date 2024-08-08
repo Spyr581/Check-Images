@@ -35,7 +35,7 @@ class InitServiceOutputInfo:
 
         self.__img_indent = max_length + 5
         self.__count_indent = 8
-        self.__threshold_indent = self.__prec + 6
+        self.__threshold_indent = self.__prec + 8
         self.__coord_indent = 8
 
     @staticmethod
