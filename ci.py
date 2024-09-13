@@ -1,5 +1,5 @@
 # Check images by OpenCV with GUI
-# Version 1.0
+# Version 1.0.1
 
 import cv2
 import numpy
@@ -46,10 +46,8 @@ class InitServiceOutputInfo:
 
     def print_header(self, scr_image: str) -> (str, str, str, str):
         screenshot = f'|   {"СКРИНШОТ" if 0 == self.__direction else "ШАБЛОН"} - {scr_image}   |'
-        precision = f'|   ТОЧНОСТЬ - 10^-{self.__prec}   ///   '
         time = datetime.datetime.now()
-        time_as_str = time.strftime('%Y-%m-%d %H:%M:%S') + '   |'
-        second_string = precision + time_as_str
+        second_string = '|   ' + time.strftime('%Y-%m-%d %H:%M:%S') + '   |'
 
         max_length = max(len(screenshot), len(second_string))
 
@@ -60,9 +58,7 @@ class InitServiceOutputInfo:
 
         # 2nd string
         left, right = self.__calculate_header_indents(max_length, len(second_string))
-        precision = f'|   {" " * left}ТОЧНОСТЬ - 10^-{self.__prec}   ///   '
-        time_as_str = time.strftime('%Y-%m-%d %H:%M:%S') + f'{" " * right}   |'
-        second_string = precision + time_as_str
+        second_string = f'|   {" " * left}' + time.strftime('%Y-%m-%d %H:%M:%S') + f'{" " * right}   |'
 
         self.__count_indents()
 
@@ -222,9 +218,13 @@ class CheckImages:
             return img
         self.__height, self.__width = img.shape
         scr_img_height, scr_img_width = scr_img.shape
-        if self.__height > scr_img_height or self.__width > scr_img_width:
+        if self.__direction == 0 and (self.__height > scr_img_height or self.__width > scr_img_width):
             return (f'Размеры картинок (ШxВ): что - {self.__width}x{self.__height}, '
                     f'где - {scr_img_width}x{scr_img_height}')
+        elif self.__direction == 1 and (scr_img_height > self.__height or scr_img_width > self.__width):
+            return (f'Размеры картинок (ШxВ): что - {scr_img_width}x{scr_img_height}, '
+                    f'где - {self.__width}x{self.__height}')
+
         try:
             result = cv2.matchTemplate(img, scr_img, cv2.TM_CCOEFF_NORMED)
         except (cv2.error, Exception) as e:

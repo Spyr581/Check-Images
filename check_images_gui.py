@@ -1,5 +1,5 @@
 # Check images by OpenCV with GUI
-# Version 1.2
+# Version 1.2.1
 # https://github.com/Spyr581/Check-Images/tree/GUI
 
 
@@ -446,7 +446,7 @@ class SettingsDialog(wx.Dialog):
         gbs.Add(self.spin_threshold, pos=(0, 2), span=(1, 3), flag=wx.EXPAND | wx.LEFT | wx.TOP | wx.RIGHT, border=5)
 
         # Точность
-        label_precision = wx.StaticText(panel, label=f"Точность (10^-N): {self.__min_prec}-{self.__max_prec}")
+        label_precision = wx.StaticText(panel, label=f"Точность, знаков: {self.__min_prec}-{self.__max_prec}")
         self.spin_precision = wx.SpinCtrl(panel, min=self.__min_prec, max=self.__max_prec)
         self.spin_precision.SetIncrement(1)
         gbs.Add(label_precision, pos=(1, 0), flag=wx.LEFT | wx.TOP | wx.RIGHT, border=5)
