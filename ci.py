@@ -1,5 +1,5 @@
 # Check images by OpenCV with GUI
-# Version 1.0.1
+# Version 1.0.2
 
 import cv2
 import numpy
@@ -232,35 +232,32 @@ class CheckImages:
 
         return result
 
-    def __filter_near_points(self, d_found_tmpl: dict) -> [((int, int), float)]:   # [((x, y), threshold), ...]
-        prev_coords = None
-        max_correlation = -1
-        coords_with_max_correlation = None
-        all_points_list = []
+    def __filter_near_points(self, d_found_tmpl: dict) -> [((int, int), float)]:  # [((x, y), threshold), ...]
+        """
+        Filters points leaving only those that are located at a sufficient distance from each other.
+        
+        :param d_found_tmpl: dict, points, where key is coordinate (x, y) and value is correlation
+        :return: list, list of filtered points in format [((x, y), correlation), ...]
+        """
+        sorted_points = sorted(d_found_tmpl.items(), key=lambda item: item[1], reverse=True)
+        filtered_points = []
+        min_distance = 15
 
-        if self.__width <= 18 and self.__height <= 18:
-            search_area = int(self.__width * 2), int(self.__height * 2)
-        else:
-            search_area = self.__width, self.__height
+        for current_coords, current_corr in sorted_points:
+            keep_point = True
 
-        for coords in sorted(d_found_tmpl.keys()):
-            if prev_coords is None:  # First point in dict
-                max_correlation = d_found_tmpl[coords]
-                coords_with_max_correlation = (coords, d_found_tmpl[coords])
-            else:
-                if abs(coords[0] - prev_coords[0]) < search_area[0] or \
-                        abs(coords[1] - prev_coords[1]) < search_area[1]:
-                    if d_found_tmpl[coords] > max_correlation:
-                        max_correlation = d_found_tmpl[coords]
-                        coords_with_max_correlation = (coords, d_found_tmpl[coords])
-                else:
-                    all_points_list.append(coords_with_max_correlation)
-                    max_correlation = d_found_tmpl[coords]
-            prev_coords = coords
-        if coords_with_max_correlation is not None:     # Add the last point if any point has been found
-            all_points_list.append(coords_with_max_correlation)
+            for filtered_coords, _ in filtered_points:
+                dx = abs(current_coords[0] - filtered_coords[0])
+                dy = abs(current_coords[1] - filtered_coords[1])
 
-        return list(set(all_points_list))
+                if dx <= min_distance and dy <= min_distance:
+                    keep_point = False
+                    break
+
+            if keep_point:
+                filtered_points.append((current_coords, current_corr))
+
+        return filtered_points
 
     def __create_empty_output_entry(self) -> OutputInfo:
         return OutputInfo('', None, 0,0, 0, 0, 0,

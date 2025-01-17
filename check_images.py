@@ -1,5 +1,5 @@
 # Check images by OpenCV
-# Version 1.2.1
+# Version 1.2.2
 
 import argparse
 import cv2
@@ -283,35 +283,32 @@ class CheckImages:
         self.__height, self.__width = img.shape
         return cv2.matchTemplate(img, self.__class__.__l_scr_img_gray[self.__screen_index], cv2.TM_CCOEFF_NORMED)
 
-    def __filter_near_points(self, found_tmpl_dict: dict) -> list:
-        prev_pt = None
-        max_correlation = -1
-        pt_with_max_correlation = None
-        all_points_list = []
+    def __filter_near_points(self, d_found_tmpl: dict) -> [((int, int), float)]:  # [((x, y), threshold), ...]
+        """
+        Filters points leaving only those that are located at a sufficient distance from each other.
 
-        if self.__width <= 18 and self.__height <= 18:
-            search_area = int(self.__width * 2), int(self.__height * 2)
-        else:
-            search_area = self.__width, self.__height
+        :param d_found_tmpl: dict, points, where key is coordinate (x, y) and value is correlation
+        :return: list, list of filtered points in format [((x, y), correlation), ...]
+        """
+        sorted_points = sorted(d_found_tmpl.items(), key=lambda item: item[1], reverse=True)
+        filtered_points = []
+        min_distance = 15
 
-        for pt in sorted(found_tmpl_dict.keys()):
-            if prev_pt is None:  # First point in dict
-                max_correlation = found_tmpl_dict[pt]
-                pt_with_max_correlation = (pt, found_tmpl_dict[pt])
-            else:
-                if abs(pt[0] - prev_pt[0]) < search_area[0] or \
-                        abs(pt[1] - prev_pt[1]) < search_area[1]:
-                    if found_tmpl_dict[pt] > max_correlation:
-                        max_correlation = found_tmpl_dict[pt]
-                        pt_with_max_correlation = (pt, found_tmpl_dict[pt])
-                else:
-                    all_points_list.append(pt_with_max_correlation)
-                    max_correlation = found_tmpl_dict[pt]
-            prev_pt = pt
-        if pt_with_max_correlation is not None:     # Add the last point if any point has been found
-            all_points_list.append(pt_with_max_correlation)
+        for current_coords, current_corr in sorted_points:
+            keep_point = True
 
-        return list(set(all_points_list))
+            for filtered_coords, _ in filtered_points:
+                dx = abs(current_coords[0] - filtered_coords[0])
+                dy = abs(current_coords[1] - filtered_coords[1])
+
+                if dx <= min_distance and dy <= min_distance:
+                    keep_point = False
+                    break
+
+            if keep_point:
+                filtered_points.append((current_coords, current_corr))
+
+        return filtered_points
 
     def __find_thresholds_for_all_images(self):
         with open('thresholds.txt', 'at', encoding='utf-8') as f:
